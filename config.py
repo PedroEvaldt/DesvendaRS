@@ -15,6 +15,7 @@ CSV_LICITACAO = DATA_RAW / "licitacao.csv"
 CSV_PESSOAS = DATA_RAW / "pessoas.csv"
 CSV_ITEM = DATA_RAW / "item.csv"
 CSV_LICITANTE = DATA_RAW / "licitante.csv"
+CSV_ITENS = DATA_RAW / "item.csv"  # alias semântico para o loader de itens
 
 CSV_EMPRESAS = DATA_RAW / "Dados-Empresas-RS.csv"
 CSV_SOCIOS = DATA_RAW / "Socios-RS.csv"
