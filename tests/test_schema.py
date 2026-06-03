@@ -46,6 +46,23 @@ ESQUEMA_ESPERADO = {
         "data_fim": "DATE",
         "fonte": "VARCHAR",
     },
+    "itens": {
+        "cd_orgao": "VARCHAR",
+        "nr_licitacao": "VARCHAR",
+        "ano_licitacao": "VARCHAR",
+        "cd_tipo_modalidade": "VARCHAR",
+        "nr_lote": "VARCHAR",
+        "nr_item": "VARCHAR",
+        "cnpj_fornecedor": "VARCHAR",
+        "descricao": "VARCHAR",
+        "descricao_normalizada": "VARCHAR",
+        "quantidade": "DECIMAL(18,4)",
+        "unidade": "VARCHAR",
+        "valor_unitario_estimado": "DECIMAL(18,4)",
+        "valor_unitario_homologado": "DECIMAL(18,4)",
+        "valor_total_homologado": "DECIMAL(18,2)",
+        "flag_covid": "BOOLEAN",
+    },
 }
 
 
@@ -71,6 +88,7 @@ def test_colunas_e_tipos(con, tabela, colunas_esperadas):
         ("empresas", "cnpj"),
         ("socios", "cnpj"),
         ("sancoes", "cnpj"),
+        ("itens", "cnpj_fornecedor"),
     ],
 )
 def test_cnpj_tem_14_digitos_sem_pontuacao(con, tabela, coluna):

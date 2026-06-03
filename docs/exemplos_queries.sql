@@ -131,3 +131,54 @@ SELECT c.cnpj_fornecedor,
   JOIN sancoes s ON c.cnpj_fornecedor = s.cnpj
  WHERE c.flag_covid IS TRUE
  ORDER BY c.valor_contrato DESC NULLS LAST;
+
+------------------------------------------------------------------
+-- 8. Top indícios de sobrepreço (razão vs. mediana do grupo)
+--    Lembrete: razão alta merece análise; pode haver explicação legítima
+--    (escopo do item, condições contratuais especiais, urgência justificada).
+------------------------------------------------------------------
+
+SELECT descricao,
+       unidade,
+       n_obs                            AS amostra_no_grupo,
+       mediana                          AS preco_unit_mediano,
+       valor_unitario_homologado        AS preco_unit_pago,
+       razao_vs_mediana
+  FROM vw_sobrepreco_indicios
+ ORDER BY razao_vs_mediana DESC
+ LIMIT 30;
+
+------------------------------------------------------------------
+-- 9. Sobrepreço cruzado com fornecedor sancionado
+--    (combinação que mais merece olho humano)
+------------------------------------------------------------------
+
+SELECT i.descricao,
+       i.unidade,
+       i.razao_vs_mediana,
+       i.mediana,
+       i.valor_unitario_homologado,
+       i.cnpj_fornecedor,
+       s.tipo_sancao,
+       s.fonte AS lista_sancao
+  FROM vw_sobrepreco_indicios i
+  JOIN sancoes s ON i.cnpj_fornecedor = s.cnpj
+ ORDER BY i.razao_vs_mediana DESC
+ LIMIT 50;
+
+------------------------------------------------------------------
+-- 10. Sobrepreço agregado por órgão (quem mais paga acima da mediana)
+------------------------------------------------------------------
+
+SELECT c.orgao,
+       c.municipio,
+       COUNT(*)                     AS qtd_indicios,
+       AVG(i.razao_vs_mediana)      AS razao_media,
+       MAX(i.razao_vs_mediana)      AS razao_pico
+  FROM vw_sobrepreco_indicios i
+  JOIN contratos c
+    ON i.cnpj_fornecedor = c.cnpj_fornecedor
+ WHERE c.orgao IS NOT NULL
+ GROUP BY c.orgao, c.municipio
+ ORDER BY qtd_indicios DESC, razao_pico DESC
+ LIMIT 30;
