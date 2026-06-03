@@ -223,3 +223,6 @@ data/processed/
 db/
 *.duckdb
 *.duckdb.wal
+
+# Claude Code — config local da máquina
+.claude/
