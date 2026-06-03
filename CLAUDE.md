@@ -60,25 +60,30 @@ ler os CSVs, padronizar e carregar no DuckDB.
 ├── uv.lock             # lockfile do uv — COMMITAR (garante ambiente reproduzível)
 ├── config.py           # caminhos relativos de data/raw/ e do banco
 ├── data/
-│   ├── raw/            # CSVs originais baixados (NÃO commitar — entra no .gitignore)
-│   │   ├── empresas_rs/
-│   │   ├── licitacon/
-│   │   └── sancoes/
+│   ├── raw/            # CSVs originais baixados, flat (NÃO commitar — entra no .gitignore)
 │   └── processed/      # CSVs/Parquet limpos (NÃO commitar)
 ├── etl/
 │   ├── __init__.py
-│   ├── normalize.py    # funções de limpeza reutilizáveis (CNPJ, datas, valores, texto)
+│   ├── normalize.py    # funções de limpeza reutilizáveis (CNPJ, datas, valores, texto, descrição de item)
 │   ├── load_contratos.py
 │   ├── load_empresas.py
 │   ├── load_socios.py
 │   ├── load_sancoes.py
+│   ├── load_itens.py   # Fase 2 — tabela itens (sobrepreço)
 │   └── build_db.py     # orquestra tudo: roda os loaders e cria o banco final
+├── scripts/
+│   └── inventario.py   # gera docs/inventario_fontes.md a partir dos CSVs brutos
+├── docs/
+│   ├── inventario_fontes.md   # cabeçalho real e % de nulos por CSV
+│   └── exemplos_queries.sql   # queries prontas pra revisão humana
 ├── db/
-│   └── dados.duckdb    # banco final — GERADO pelo pipeline (NÃO commitar, não existe ainda)
+│   └── dados.duckdb    # banco final — GERADO pelo pipeline (NÃO commitar)
 └── tests/
+    ├── conftest.py
     ├── test_normalize.py
     ├── test_schema.py
-    └── test_joins.py
+    ├── test_joins.py
+    └── test_itens.py   # Fase 2
 ```
 
 `data/`, `db/` e qualquer arquivo `*.duckdb` ou `*.csv` pesado vão no `.gitignore`.
@@ -100,15 +105,15 @@ Pasta com várias tabelas relacionadas. **Usar no MVP:**
 |---|---|---|
 | `licitacao.csv` | 1 linha por processo: órgão, município, modalidade, objeto, valor, data, tipo | Tabela mãe |
 | `pessoas.csv` | Entidades referenciadas (empresas/órgãos/pessoas) com CNPJ/CPF e nome | Mapeia código interno → CNPJ |
-| `item.csv` | Itens comprados: descrição, quantidade, unidade, valor unitário, valor total | Detalhe pra análise de preço |
+| `item.csv` | Itens comprados: descrição, quantidade, unidade, valor unitário, valor total | **Fase 2** — base da análise de sobrepreço |
 | `licitante.csv` | Quem participou de cada licitação | Análise de competição |
 
-**Fase 2 (se sobrar tempo):** `proposta.csv`, `item_prop.csv`, `evento_lic.csv`, `lote.csv`, `lote_prop.csv`.
-**Ignorar no MVP:** `documento_lic.csv`, `comissao.csv`, `memcomissao.csv`, `dotacao_lic.csv`, `membrocons.csv`.
+**Fase 3 (não iniciada):** `proposta.csv`, `item_prop.csv`, `evento_lic.csv`, `lote.csv`, `lote_prop.csv`.
+**Ignorar:** `documento_lic.csv`, `comissao.csv`, `memcomissao.csv`, `dotacao_lic.csv`, `membrocons.csv`.
 
-> As tabelas do LicitaCon se ligam por um ID de licitação (provavelmente `id_licitacao`
-> ou similar). **Antes de codar o JOIN, inspecione os cabeçalhos reais** dos CSVs para
-> descobrir o nome exato da chave — não assuma.
+> **Chave de ligação entre tabelas do LicitaCon (confirmada na inspeção):** é **composta** —
+> `(CD_ORGAO, NR_LICITACAO, ANO_LICITACAO, CD_TIPO_MODALIDADE)`. Não existe um `id_licitacao`
+> único na fonte. Ver `docs/inventario_fontes.md` para os cabeçalhos reais.
 > Dados são **autodeclarados** pelas entidades, não validados pelo TCE. A qualidade varia
 > muito por município (campos vazios, formatos diferentes). Trate isso defensivamente.
 
@@ -125,9 +130,10 @@ Pasta com várias tabelas relacionadas. **Usar no MVP:**
 
 ---
 
-## 6. Esquema alvo (4 tabelas no DuckDB)
+## 6. Esquema alvo (5 tabelas no DuckDB)
 
-Construir exatamente estas 4 tabelas. Tipos de DuckDB indicados.
+Construir exatamente estas 5 tabelas. Tipos de DuckDB indicados. As 4 primeiras vieram
+no MVP (Fase 1); `itens` entra na Fase 2.
 
 ### `contratos` (de LicitaCon: licitacao + item + licitante + pessoas)
 | Coluna | Tipo | Origem |
@@ -177,6 +183,33 @@ Construir exatamente estas 4 tabelas. Tipos de DuckDB indicados.
 | `data_fim` | DATE |
 | `fonte` | VARCHAR (`'CEIS'`, `'CNEP'` ou `'CFIL'`) |
 
+### `itens` (de `item.csv` — Fase 2, base de sobrepreço)
+Granularidade: 1 linha por `(CD_ORGAO, NR_LICITACAO, ANO_LICITACAO, CD_TIPO_MODALIDADE, NR_LOTE, NR_ITEM)`.
+
+| Coluna | Tipo | Origem |
+|---|---|---|
+| `cd_orgao` | VARCHAR | item — parte da chave da licitação |
+| `nr_licitacao` | VARCHAR | item |
+| `ano_licitacao` | VARCHAR | item |
+| `cd_tipo_modalidade` | VARCHAR | item |
+| `nr_lote` | VARCHAR | item |
+| `nr_item` | VARCHAR | item |
+| `cnpj_fornecedor` | VARCHAR | item `NR_DOCUMENTO` onde `TP_DOCUMENTO='J'` (nullable) |
+| `descricao` | VARCHAR | `DS_ITEM` |
+| `descricao_normalizada` | VARCHAR | `normalizar_descricao_item(DS_ITEM)` |
+| `quantidade` | DECIMAL | `QT_ITENS` |
+| `unidade` | VARCHAR | `SG_UNIDADE_MEDIDA` |
+| `valor_unitario_estimado` | DECIMAL | `VL_UNITARIO_ESTIMADO` |
+| `valor_unitario_homologado` | DECIMAL | `VL_UNITARIO_HOMOLOGADO` |
+| `valor_total_homologado` | DECIMAL | `VL_TOTAL_HOMOLOGADO` |
+| `flag_covid` | BOOLEAN | `BL_COVID19` |
+
+### Views geradas pelo `build_db.py`
+- `vw_contratos_homologados` — só contratos com fornecedor + valor + data preenchidos.
+- `vw_contratos_com_sancao` — contratos cujo fornecedor está em alguma lista de sanção.
+- `vw_empresas_sancionadas` — empresas RS sancionadas.
+- `vw_sobrepreco_indicios` (Fase 2) — itens com `valor_unitario_homologado` ≥ 3× mediana do grupo `(descricao_normalizada, unidade)` com massa ≥ 10 observações.
+
 ---
 
 ## 7. Regras de normalização (CRÍTICO — fazer em `etl/normalize.py`)
@@ -192,6 +225,9 @@ Funções reutilizáveis, cada uma com teste próprio:
    número. Trata vírgula decimal e separador de milhar do padrão brasileiro.
 4. **`normalizar_texto(valor)`** — trim, colapsa espaços múltiplos, padroniza maiúsculas
    para razões sociais (ajuda a casar nomes com variação).
+5. **`normalizar_descricao_item(texto)`** (Fase 2) — lowercase, colapsa espaços, remove
+   pontuação e dígitos isolados. É a chave de agrupamento da view de sobrepreço; mesmo
+   produto descrito de N maneiras precisa cair no mesmo bucket.
 
 > Aplicar `limpar_cnpj` em **todas** as colunas de CNPJ de **todas** as fontes antes de
 > qualquer JOIN. Esse é o ponto onde o cruzamento entre bases dá certo ou falha.
@@ -200,21 +236,24 @@ Funções reutilizáveis, cada uma com teste próprio:
 
 ## 8. O que preciso que você faça (ordem sugerida)
 
-0. **Configurar o projeto com `uv`** (se ainda não estiver): `uv init` (caso não exista
-   `pyproject.toml`), depois `uv add duckdb pandas polars requests httpx` e
-   `uv add --dev pytest`. Tudo daqui pra frente roda com `uv run ...`.
-1. **Inspecionar** os cabeçalhos e as 5 primeiras linhas de cada CSV de `data/raw/` e
-   gerar um relatório curto (`docs/inventario_fontes.md`) com: nome real das colunas, tipos
-   aparentes, % de nulos nas colunas-chave, e a chave de ligação das tabelas do LicitaCon.
-   **Não assuma nomes de coluna — confirme olhando os dados.**
-2. **Implementar** `etl/normalize.py` com as 4 funções da seção 7 + testes.
-3. **Implementar** os loaders (`load_*.py`), cada um lendo o(s) CSV(s) da fonte, aplicando
-   a normalização e devolvendo um DataFrame limpo no esquema alvo da seção 6.
-4. **Implementar** `etl/build_db.py` que roda todos os loaders, **cria do zero** o
-   `db/dados.duckdb` com as 4 tabelas, cria índices/visões úteis em `cnpj` e imprime um
-   resumo (nº de linhas por tabela, quantos CNPJs casam entre tabelas).
-5. **Escrever os testes** da seção 9 e garantir que passam.
-6. **Atualizar** o `README.md` com como rodar o pipeline do zero.
+**Fase 1 (MVP) — ✅ concluída** (commits `c76e589..ff1b14c`):
+bootstrap com `uv`, inventário, `normalize.py`, 4 loaders, `build_db.py`,
+testes, README, queries de exemplo. 52 testes verdes.
+
+**Fase 2 (em andamento) — branch `feature/itens-e-sobrepreco`:**
+
+1. **Adicionar `normalizar_descricao_item`** em `etl/normalize.py` + testes.
+2. **Implementar `etl/load_itens.py`** lendo `item.csv` e devolvendo o
+   DataFrame no esquema `itens` da seção 6.
+3. **Atualizar `etl/build_db.py`** para criar a tabela `itens`, a view
+   `vw_sobrepreco_indicios` e estender o relatório de qualidade.
+4. **Testes**: estender `test_schema.py`, `test_joins.py`; criar
+   `test_itens.py`.
+5. **`docs/exemplos_queries.sql`**: adicionar 2-3 queries de sobrepreço.
+6. **README**: incluir `itens` na tabela de schema.
+
+**Fase 3 (não iniciada):** carregar `proposta.csv`, `evento_lic.csv`,
+`lote.csv` para análise de competição/cartel e linha do tempo de licitações.
 
 Trabalhe em **incrementos pequenos e testáveis**. Rode o código a cada etapa; não escreva
 o pipeline todo de uma vez. Se um arquivo for grande demais pra carregar na memória, leia
@@ -288,9 +327,17 @@ duckdb db/dados.duckdb
 
 ## 13. Definição de pronto (este módulo)
 
-- [ ] As 4 tabelas existem em `db/dados.duckdb` com o esquema da seção 6.
-- [ ] CNPJs normalizados (14 dígitos, sem pontuação) em todas as tabelas.
-- [ ] CNPJs casam entre `contratos`, `empresas`, `socios` e `sancoes` (comprovado por teste).
-- [ ] Todos os testes do `pytest` passam.
-- [ ] `README.md` explica como reconstruir o banco do zero.
-- [ ] `docs/inventario_fontes.md` documenta as colunas reais de cada fonte.
+### Fase 1 (MVP) — ✅ concluída
+- [x] As 4 tabelas existem em `db/dados.duckdb` com o esquema da seção 6.
+- [x] CNPJs normalizados (14 dígitos, sem pontuação) em todas as tabelas.
+- [x] CNPJs casam entre `contratos`, `empresas`, `socios` e `sancoes` (comprovado por teste).
+- [x] Todos os testes do `pytest` passam.
+- [x] `README.md` explica como reconstruir o banco do zero.
+- [x] `docs/inventario_fontes.md` documenta as colunas reais de cada fonte.
+
+### Fase 2 (sobrepreço) — em andamento
+- [ ] Tabela `itens` existe com 1 linha por (licitação × lote × item).
+- [ ] `descricao_normalizada` agrupa o suficiente para análise estatística
+      (≥ 100 grupos com massa ≥ 10).
+- [ ] `vw_sobrepreco_indicios` devolve resultados não-triviais (≥ 50 linhas).
+- [ ] Testes 100% verdes (existentes + novos de `itens`).
