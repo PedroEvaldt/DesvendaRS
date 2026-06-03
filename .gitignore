@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# DesvendaRS — dados brutos, processados e banco gerado (nunca commitar)
+data/raw/
+data/processed/
+db/
+*.duckdb
+*.duckdb.wal
