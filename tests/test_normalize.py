@@ -8,6 +8,7 @@ import pytest
 from etl.normalize import (
     limpar_cnpj,
     limpar_valor,
+    normalizar_descricao_item,
     normalizar_texto,
     padronizar_data,
 )
@@ -133,6 +134,51 @@ class TestNormalizarTexto:
 
     def test_none(self):
         assert normalizar_texto(None) is None
+
+
+class TestNormalizarDescricaoItem:
+    def test_lower_e_trim(self):
+        assert normalizar_descricao_item("  Café em Pó  ") == "café em pó"
+
+    def test_remove_pontuacao(self):
+        # 500g e a4 ficam preservados — tamanho/formato é parte do produto.
+        assert (
+            normalizar_descricao_item("café em pó - 500g, embalagem a vácuo.")
+            == "café em pó 500g embalagem a vácuo"
+        )
+
+    def test_colapsa_espacos(self):
+        assert (
+            normalizar_descricao_item("AÇÚCAR    cristal   1kg")
+            == "açúcar cristal 1kg"
+        )
+
+    def test_remove_digitos_isolados(self):
+        # "1" e "12345" são dígitos isolados (códigos internos / quantidades) → fora.
+        # "5KG" sobrevive porque o dígito está grudado em letra.
+        assert (
+            normalizar_descricao_item("ARROZ TIPO 1 PACOTE 5KG NR 12345")
+            == "arroz tipo pacote 5kg nr"
+        )
+
+    def test_preserva_digitos_grudados_em_letra(self):
+        # "5kg" vira "kg" porque a pontuação separa o "5" do "kg", mas
+        # códigos como "A4" devem sobreviver porque dígito está grudado em letra.
+        assert normalizar_descricao_item("Papel sulfite A4") == "papel sulfite a4"
+
+    def test_mesma_descricao_caixa_diferente(self):
+        a = normalizar_descricao_item("Açúcar Cristal 1kg")
+        b = normalizar_descricao_item("AÇÚCAR CRISTAL 1KG")
+        assert a == b
+
+    def test_vazio(self):
+        assert normalizar_descricao_item("") is None
+
+    def test_so_pontuacao(self):
+        assert normalizar_descricao_item("---") is None
+
+    def test_none(self):
+        assert normalizar_descricao_item(None) is None
 
 
 if __name__ == "__main__":

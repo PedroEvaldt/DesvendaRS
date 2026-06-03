@@ -12,6 +12,8 @@ from typing import Any
 
 _NAO_DIGITO = re.compile(r"\D+")
 _ESPACOS = re.compile(r"\s+")
+_PONTUACAO = re.compile(r"[^\w\s]+", re.UNICODE)
+_DIGITOS_ISOLADOS = re.compile(r"\b\d+\b")
 
 _LIMITE_ANO_MIN = 1900
 _LIMITE_ANO_MAX = date.today().year + 10
@@ -114,6 +116,30 @@ def limpar_valor(valor: Any) -> float | None:
         return float(texto)
     except ValueError:
         return None
+
+
+def normalizar_descricao_item(valor: Any) -> str | None:
+    """Normaliza descrição de item de licitação para agrupamento.
+
+    Mesmo produto aparece descrito de N maneiras diferentes (com pontuação,
+    códigos internos, números de série, caixa variada). Esta função produz
+    uma chave de agrupamento estável:
+
+    1. lowercase;
+    2. remove pontuação (preserva letras com acento e dígitos);
+    3. remove dígitos isolados (não-grudados a letras) — códigos internos,
+       quantidades embarcadas na descrição etc. tendem a ser dígitos puros;
+    4. colapsa espaços múltiplos e faz trim.
+
+    Retorna ``None`` se sobrar string vazia.
+    """
+    if _eh_nulo(valor):
+        return None
+    texto = str(valor).lower()
+    texto = _PONTUACAO.sub(" ", texto)
+    texto = _DIGITOS_ISOLADOS.sub(" ", texto)
+    texto = _ESPACOS.sub(" ", texto).strip()
+    return texto if texto else None
 
 
 def normalizar_texto(valor: Any, *, upper: bool = False) -> str | None:
