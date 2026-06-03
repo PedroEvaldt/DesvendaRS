@@ -1,0 +1,17 @@
+[project]
+name = "desvendars"
+version = "0.1.0"
+description = "Camada de coleta e armazenamento (ETL) do DesvendaRS — agrega dados públicos de gastos do RS em um DuckDB único."
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb>=1.5.3",
+    "httpx>=0.28.1",
+    "pandas>=3.0.3",
+    "polars>=1.41.2",
+    "requests>=2.34.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
