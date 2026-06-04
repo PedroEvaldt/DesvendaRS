@@ -1,9 +1,10 @@
 """Orquestra o pipeline: lê CSVs de data/raw/ e (re)cria db/dados.duckdb do zero.
 
-Saída: `db/dados.duckdb` com 5 tabelas (`contratos`, `empresas`, `socios`,
-`sancoes`, `itens`) e 4 views de cruzamento. Ao final, imprime um relatório
-de qualidade com contagens, % de nulos nas colunas-chave e tamanho dos JOINs
-entre tabelas.
+Saída: `db/dados.duckdb` com 8 tabelas (`contratos`, `empresas`, `socios`,
+`sancoes`, `itens`, `propostas`, `propostas_itens`, `eventos_licitacao`) e
+7 views (sanção, sobrepreço, cover bidding, proposta única, alteração de
+edital). Ao final, imprime um relatório de qualidade com contagens, % de
+nulos nas colunas-chave e tamanho dos JOINs entre tabelas.
 """
 from __future__ import annotations
 
@@ -17,7 +18,10 @@ import pandas as pd
 import config
 from etl.load_contratos import load_contratos
 from etl.load_empresas import load_empresas
+from etl.load_eventos import load_eventos
 from etl.load_itens import load_itens
+from etl.load_propostas import load_propostas
+from etl.load_propostas_itens import load_propostas_itens
 from etl.load_sancoes import load_sancoes
 from etl.load_socios import load_socios
 
@@ -97,6 +101,62 @@ SCHEMAS = {
             CAST(flag_covid AS BOOLEAN)            AS flag_covid
         FROM df
     """,
+    "propostas": """
+        CREATE TABLE propostas AS
+        SELECT
+            CAST(cd_orgao AS VARCHAR)              AS cd_orgao,
+            CAST(nr_licitacao AS VARCHAR)          AS nr_licitacao,
+            CAST(ano_licitacao AS VARCHAR)         AS ano_licitacao,
+            CAST(cd_tipo_modalidade AS VARCHAR)    AS cd_tipo_modalidade,
+            CAST(cnpj_proposta AS VARCHAR)         AS cnpj_proposta,
+            CAST(data_proposta AS DATE)            AS data_proposta,
+            CAST(resultado_proposta AS VARCHAR)    AS resultado_proposta,
+            CAST(valor_total_proposta AS DECIMAL(18,2))  AS valor_total_proposta,
+            CAST(percentual_desconto AS DECIMAL(8,4))    AS percentual_desconto,
+            CAST(valor_nota_tecnica AS DECIMAL(18,4))    AS valor_nota_tecnica,
+            CAST(data_homologacao AS DATE)         AS data_homologacao
+        FROM df
+    """,
+    "propostas_itens": """
+        CREATE TABLE propostas_itens AS
+        SELECT
+            CAST(cd_orgao AS VARCHAR)              AS cd_orgao,
+            CAST(nr_licitacao AS VARCHAR)          AS nr_licitacao,
+            CAST(ano_licitacao AS VARCHAR)         AS ano_licitacao,
+            CAST(cd_tipo_modalidade AS VARCHAR)    AS cd_tipo_modalidade,
+            CAST(nr_lote AS VARCHAR)               AS nr_lote,
+            CAST(nr_item AS VARCHAR)               AS nr_item,
+            CAST(cnpj_proposta AS VARCHAR)         AS cnpj_proposta,
+            CAST(valor_unitario AS DECIMAL(18,4))  AS valor_unitario,
+            CAST(valor_total_item AS DECIMAL(18,2)) AS valor_total_item,
+            CAST(percentual_desconto AS DECIMAL(8,4)) AS percentual_desconto,
+            CAST(percentual_bdi AS DECIMAL(8,4))   AS percentual_bdi,
+            CAST(valor_nota_tecnica AS DECIMAL(18,4)) AS valor_nota_tecnica,
+            CAST(data_homologacao AS DATE)         AS data_homologacao,
+            CAST(resultado_proposta AS VARCHAR)    AS resultado_proposta,
+            CAST(resultado_habilitacao AS VARCHAR) AS resultado_habilitacao
+        FROM df
+    """,
+    "eventos_licitacao": """
+        CREATE TABLE eventos_licitacao AS
+        SELECT
+            CAST(cd_orgao AS VARCHAR)              AS cd_orgao,
+            CAST(nr_licitacao AS VARCHAR)          AS nr_licitacao,
+            CAST(ano_licitacao AS VARCHAR)         AS ano_licitacao,
+            CAST(cd_tipo_modalidade AS VARCHAR)    AS cd_tipo_modalidade,
+            CAST(sq_evento AS VARCHAR)             AS sq_evento,
+            CAST(cd_tipo_fase AS VARCHAR)          AS cd_tipo_fase,
+            CAST(cd_tipo_evento AS VARCHAR)        AS cd_tipo_evento,
+            CAST(data_evento AS DATE)              AS data_evento,
+            CAST(tipo_veiculo_publicacao AS VARCHAR) AS tipo_veiculo_publicacao,
+            CAST(descricao_publicacao AS VARCHAR)  AS descricao_publicacao,
+            CAST(cnpj_autor AS VARCHAR)            AS cnpj_autor,
+            CAST(data_julgamento AS DATE)          AS data_julgamento,
+            CAST(tipo_resultado AS VARCHAR)        AS tipo_resultado,
+            CAST(nr_lote AS VARCHAR)               AS nr_lote,
+            CAST(nr_item AS VARCHAR)               AS nr_item
+        FROM df
+    """,
 }
 
 VIEWS = {
@@ -151,6 +211,78 @@ VIEWS = {
           JOIN grupo g USING (descricao_normalizada, unidade)
          WHERE i.valor_unitario_homologado / g.mediana >= 3
     """,
+    # Proposta única classificada: licitação com 1 só proposta sobrevivendo à
+    # classificação. Mais forte que qtd_participantes=1 porque desconsidera
+    # desclassificadas (proposta apresentada mas inválida).
+    "vw_proposta_unica": """
+        CREATE VIEW vw_proposta_unica AS
+        SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+               COUNT(*) AS qtd_propostas_classificadas
+          FROM propostas
+         WHERE resultado_proposta = 'C'
+         GROUP BY cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+        HAVING COUNT(*) = 1
+    """,
+    # Indícios de cover bidding: em licitações com >=3 propostas classificadas,
+    # razão entre a 2ª menor e a menor. Razão >= 2x = candidato a "proposta
+    # perdedora artificialmente alta" (a vencedora "merece" ganhar).
+    # Limiar (razão>=2, n>=3) é chute inicial.
+    "vw_cover_bidding_indicios": """
+        CREATE VIEW vw_cover_bidding_indicios AS
+        WITH classificadas AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   cnpj_proposta, valor_total_proposta,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+                       ORDER BY valor_total_proposta ASC
+                   ) AS rank_preco,
+                   COUNT(*) OVER (
+                       PARTITION BY cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+                   ) AS n_classificadas
+              FROM propostas
+             WHERE resultado_proposta = 'C'
+               AND valor_total_proposta IS NOT NULL
+               AND valor_total_proposta > 0
+        ),
+        menor AS (SELECT * FROM classificadas WHERE rank_preco = 1),
+        segunda AS (SELECT * FROM classificadas WHERE rank_preco = 2)
+        SELECT m.cd_orgao, m.nr_licitacao, m.ano_licitacao, m.cd_tipo_modalidade,
+               m.n_classificadas,
+               m.cnpj_proposta AS cnpj_vencedora,
+               m.valor_total_proposta AS valor_vencedora,
+               s.cnpj_proposta AS cnpj_segunda,
+               s.valor_total_proposta AS valor_segunda,
+               s.valor_total_proposta / m.valor_total_proposta AS razao_2a_vs_1a
+          FROM menor m
+          JOIN segunda s USING (cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade)
+         WHERE m.n_classificadas >= 3
+           AND s.valor_total_proposta / m.valor_total_proposta >= 2
+    """,
+    # Alteração de edital após abertura: eventos do tipo AED (alteração) ou
+    # REE (republicação) com data posterior à data de abertura (DT_ABERTURA
+    # da licitação na tabela contratos não está preservada; usamos o primeiro
+    # PUE — publicação edital — como proxy de abertura formal).
+    "vw_alteracao_apos_abertura": """
+        CREATE VIEW vw_alteracao_apos_abertura AS
+        WITH primeira_pub AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   MIN(data_evento) AS data_publicacao
+              FROM eventos_licitacao
+             WHERE cd_tipo_evento IN ('PUE', 'PUB')
+               AND data_evento IS NOT NULL
+             GROUP BY cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+        )
+        SELECT e.cd_orgao, e.nr_licitacao, e.ano_licitacao, e.cd_tipo_modalidade,
+               e.cd_tipo_evento,
+               p.data_publicacao,
+               e.data_evento AS data_alteracao,
+               e.data_evento - p.data_publicacao AS dias_apos_publicacao
+          FROM eventos_licitacao e
+          JOIN primeira_pub p USING (cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade)
+         WHERE e.cd_tipo_evento IN ('AED', 'REE')
+           AND e.data_evento IS NOT NULL
+           AND e.data_evento > p.data_publicacao
+    """,
 }
 
 
@@ -160,7 +292,7 @@ def _criar_tabela(con: duckdb.DuckDBPyConnection, nome: str, df: pd.DataFrame) -
     con.execute(f"DROP TABLE IF EXISTS {nome}")
     con.execute(SCHEMAS[nome])
     con.unregister("df")
-    # Índice em CNPJ (ou na chave de agrupamento, no caso de itens)
+    # Índice em CNPJ (ou na chave de agrupamento, conforme a tabela)
     if nome == "contratos":
         con.execute(
             f"CREATE INDEX IF NOT EXISTS idx_{nome}_cnpj ON {nome} (cnpj_fornecedor)"
@@ -173,6 +305,32 @@ def _criar_tabela(con: duckdb.DuckDBPyConnection, nome: str, df: pd.DataFrame) -
         con.execute(
             "CREATE INDEX IF NOT EXISTS idx_itens_cnpj ON itens (cnpj_fornecedor)"
         )
+    elif nome == "propostas":
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_propostas_cnpj ON propostas (cnpj_proposta)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_propostas_licitacao "
+            "ON propostas (cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade)"
+        )
+    elif nome == "propostas_itens":
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_propostas_itens_cnpj "
+            "ON propostas_itens (cnpj_proposta)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_propostas_itens_licitacao "
+            "ON propostas_itens (cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade)"
+        )
+    elif nome == "eventos_licitacao":
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_eventos_licitacao "
+            "ON eventos_licitacao (cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_eventos_tipo "
+            "ON eventos_licitacao (cd_tipo_evento)"
+        )
     else:
         con.execute(f"CREATE INDEX IF NOT EXISTS idx_{nome}_cnpj ON {nome} (cnpj)")
 
@@ -182,9 +340,18 @@ def _relatorio_qualidade(con: duckdb.DuckDBPyConnection) -> None:
     print("=" * 70)
     print("RELATÓRIO DE QUALIDADE — db/dados.duckdb")
     print("=" * 70)
-    for tabela in ("contratos", "empresas", "socios", "sancoes", "itens"):
+    chave_por_tabela = {
+        "contratos": "cnpj_fornecedor",
+        "empresas": "cnpj",
+        "socios": "cnpj",
+        "sancoes": "cnpj",
+        "itens": "cnpj_fornecedor",
+        "propostas": "cnpj_proposta",
+        "propostas_itens": "cnpj_proposta",
+        "eventos_licitacao": "cnpj_autor",
+    }
+    for tabela, chave in chave_por_tabela.items():
         total = con.execute(f"SELECT COUNT(*) FROM {tabela}").fetchone()[0]
-        chave = "cnpj_fornecedor" if tabela in ("contratos", "itens") else "cnpj"
         distintos = con.execute(
             f"SELECT COUNT(DISTINCT {chave}) FROM {tabela}"
         ).fetchone()[0]
@@ -196,7 +363,7 @@ def _relatorio_qualidade(con: duckdb.DuckDBPyConnection) -> None:
             f"WHERE {chave} IS NOT NULL AND LENGTH({chave}) <> 14"
         ).fetchone()[0]
         print(
-            f"  {tabela:10s}  total={total:>10,}  cnpj_distintos={distintos:>9,}  "
+            f"  {tabela:17s} total={total:>10,}  cnpj_distintos={distintos:>9,}  "
             f"nulos_chave={nulos:>7,}  cnpj_invalido={invalidos:>5,}".replace(",", ".")
         )
 
@@ -243,6 +410,15 @@ def _relatorio_qualidade(con: duckdb.DuckDBPyConnection) -> None:
     print(f"  grupos (descricao×unidade) totais:        {grupos_total:>9,}".replace(",", "."))
     print(f"  grupos com massa estatística (n>=10):     {grupos_com_massa:>9,}".replace(",", "."))
     print(f"  itens marcados como indício de sobrepreço: {indicios:>9,}".replace(",", "."))
+
+    print()
+    print("Propostas (Fase 3):")
+    p_unica = con.execute("SELECT COUNT(*) FROM vw_proposta_unica").fetchone()[0]
+    p_cover = con.execute("SELECT COUNT(*) FROM vw_cover_bidding_indicios").fetchone()[0]
+    p_alt = con.execute("SELECT COUNT(*) FROM vw_alteracao_apos_abertura").fetchone()[0]
+    print(f"  licitações com proposta única classificada: {p_unica:>9,}".replace(",", "."))
+    print(f"  indícios de cover bidding (razão>=2x):       {p_cover:>9,}".replace(",", "."))
+    print(f"  eventos de alteração após abertura:          {p_alt:>9,}".replace(",", "."))
     print("=" * 70)
 
 
@@ -262,6 +438,9 @@ def main() -> None:
     socios = load_socios()
     sancoes = load_sancoes()
     itens = load_itens()
+    propostas = load_propostas()
+    propostas_itens = load_propostas_itens()
+    eventos = load_eventos()
 
     log.info("Conectando ao DuckDB em %s", config.DB_PATH)
     con = duckdb.connect(str(config.DB_PATH))
@@ -271,6 +450,9 @@ def main() -> None:
         _criar_tabela(con, "socios", socios)
         _criar_tabela(con, "sancoes", sancoes)
         _criar_tabela(con, "itens", itens)
+        _criar_tabela(con, "propostas", propostas)
+        _criar_tabela(con, "propostas_itens", propostas_itens)
+        _criar_tabela(con, "eventos_licitacao", eventos)
         for nome, sql in VIEWS.items():
             log.info("Criando view %s", nome)
             con.execute(f"DROP VIEW IF EXISTS {nome}")
