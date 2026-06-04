@@ -108,7 +108,8 @@ Pasta com várias tabelas relacionadas. **Usar no MVP:**
 | `item.csv` | Itens comprados: descrição, quantidade, unidade, valor unitário, valor total | **Fase 2** — base da análise de sobrepreço |
 | `licitante.csv` | Quem participou de cada licitação | Análise de competição |
 
-**Fase 3 (não iniciada):** `proposta.csv`, `item_prop.csv`, `evento_lic.csv`, `lote.csv`, `lote_prop.csv`.
+**Fase 3 (em andamento):** `proposta.csv`, `item_prop.csv`, `evento_lic.csv` já carregados em tabelas dedicadas.
+**Fase 4 (não iniciada):** `lote.csv`, `lote_prop.csv` (granularidade intermediária — `propostas_itens` já cobre o caso analítico principal).
 **Ignorar:** `documento_lic.csv`, `comissao.csv`, `memcomissao.csv`, `dotacao_lic.csv`, `membrocons.csv`.
 
 > **Chave de ligação entre tabelas do LicitaCon (confirmada na inspeção):** é **composta** —
@@ -130,10 +131,11 @@ Pasta com várias tabelas relacionadas. **Usar no MVP:**
 
 ---
 
-## 6. Esquema alvo (5 tabelas no DuckDB)
+## 6. Esquema alvo (8 tabelas no DuckDB)
 
-Construir exatamente estas 5 tabelas. Tipos de DuckDB indicados. As 4 primeiras vieram
-no MVP (Fase 1); `itens` entra na Fase 2.
+Construir exatamente estas 8 tabelas. Tipos de DuckDB indicados. Fase 1 (MVP):
+`contratos`, `empresas`, `socios`, `sancoes`. Fase 2: `itens`. Fase 3: `propostas`,
+`propostas_itens`, `eventos_licitacao`.
 
 ### `contratos` (de LicitaCon: licitacao + item + licitante + pessoas)
 | Coluna | Tipo | Origem |
@@ -204,11 +206,58 @@ Granularidade: 1 linha por `(CD_ORGAO, NR_LICITACAO, ANO_LICITACAO, CD_TIPO_MODA
 | `valor_total_homologado` | DECIMAL | `VL_TOTAL_HOMOLOGADO` |
 | `flag_covid` | BOOLEAN | `BL_COVID19` |
 
+### `propostas` (de `proposta.csv` — Fase 3)
+Granularidade: 1 linha por (licitação × fornecedor que apresentou proposta).
+
+| Coluna | Tipo | Origem |
+|---|---|---|
+| `cd_orgao`, `nr_licitacao`, `ano_licitacao`, `cd_tipo_modalidade` | VARCHAR | chave da licitação |
+| `cnpj_proposta` | VARCHAR | `NR_DOCUMENTO` onde `TP_DOCUMENTO='J'` (**chave de fornecedor**) |
+| `data_proposta` | DATE | `DT_PROPOSTA` |
+| `resultado_proposta` | VARCHAR | `'C'`=Classificada, `'D'`=Desclassificada, `'P'`=Pendente |
+| `valor_total_proposta` | DECIMAL | `VL_TOTAL_PROPOSTA` |
+| `percentual_desconto` | DECIMAL | `PC_DESCONTO` |
+| `valor_nota_tecnica` | DECIMAL | `VL_NOTA_TECNICA` |
+| `data_homologacao` | DATE | `DT_HOMOLOGACAO` |
+
+### `propostas_itens` (de `item_prop.csv` — Fase 3)
+Granularidade: 1 linha por (licitação × lote × item × fornecedor). Permite
+comparar TODOS os preços propostos no mesmo item — refina sobrepreço.
+
+| Coluna | Tipo | Origem |
+|---|---|---|
+| chave da licitação + `nr_lote`, `nr_item` | VARCHAR | |
+| `cnpj_proposta` | VARCHAR | (**chave de fornecedor**) |
+| `valor_unitario` | DECIMAL | `VL_UNITARIO` |
+| `valor_total_item` | DECIMAL | `VL_TOTAL_ITEM` |
+| `percentual_desconto`, `percentual_bdi`, `valor_nota_tecnica` | DECIMAL | |
+| `data_homologacao` | DATE | |
+| `resultado_proposta` | VARCHAR | `'C'`/`'D'`/`'P'` |
+| `resultado_habilitacao` | VARCHAR | `'H'`=Habilitada, `'N'`=Não habilitada, `'I'`=Inabilitada |
+
+### `eventos_licitacao` (de `evento_lic.csv` — Fase 3)
+Granularidade: 1 linha por evento na linha do tempo de uma licitação.
+
+| Coluna | Tipo | Origem |
+|---|---|---|
+| chave da licitação + `sq_evento` | VARCHAR | |
+| `cd_tipo_fase`, `cd_tipo_evento` | VARCHAR | códigos do TCE (`PUB`, `PUE`, `ENC`, `AED`, `REE`, `ANO`, `SUO`...) |
+| `data_evento` | DATE | `DT_EVENTO` |
+| `tipo_veiculo_publicacao` | VARCHAR | `J`=Jornal, etc. |
+| `descricao_publicacao` | VARCHAR | texto livre |
+| `cnpj_autor` | VARCHAR | só se autor é PJ (LGPD) |
+| `data_julgamento` | DATE | |
+| `tipo_resultado` | VARCHAR | |
+| `nr_lote`, `nr_item` | VARCHAR | quando o evento se refere a item específico |
+
 ### Views geradas pelo `build_db.py`
 - `vw_contratos_homologados` — só contratos com fornecedor + valor + data preenchidos.
 - `vw_contratos_com_sancao` — contratos cujo fornecedor está em alguma lista de sanção.
 - `vw_empresas_sancionadas` — empresas RS sancionadas.
 - `vw_sobrepreco_indicios` (Fase 2) — itens com `valor_unitario_homologado` ≥ 3× mediana do grupo `(descricao_normalizada, unidade)` com massa ≥ 10 observações.
+- `vw_proposta_unica` (Fase 3) — licitações com 1 só proposta classificada.
+- `vw_cover_bidding_indicios` (Fase 3) — em licitações com ≥ 3 propostas classificadas, razão 2ª/1ª ≥ 2× (proposta perdedora artificialmente alta).
+- `vw_alteracao_apos_abertura` (Fase 3) — eventos `AED`/`REE` após a primeira publicação.
 
 ---
 
@@ -240,20 +289,26 @@ Funções reutilizáveis, cada uma com teste próprio:
 bootstrap com `uv`, inventário, `normalize.py`, 4 loaders, `build_db.py`,
 testes, README, queries de exemplo. 52 testes verdes.
 
-**Fase 2 (em andamento) — branch `feature/itens-e-sobrepreco`:**
+**Fase 2 (concluída) — mergeada em `main`:** tabela `itens` + view
+`vw_sobrepreco_indicios` + `normalizar_descricao_item`.
 
-1. **Adicionar `normalizar_descricao_item`** em `etl/normalize.py` + testes.
-2. **Implementar `etl/load_itens.py`** lendo `item.csv` e devolvendo o
-   DataFrame no esquema `itens` da seção 6.
-3. **Atualizar `etl/build_db.py`** para criar a tabela `itens`, a view
-   `vw_sobrepreco_indicios` e estender o relatório de qualidade.
-4. **Testes**: estender `test_schema.py`, `test_joins.py`; criar
-   `test_itens.py`.
-5. **`docs/exemplos_queries.sql`**: adicionar 2-3 queries de sobrepreço.
-6. **README**: incluir `itens` na tabela de schema.
+**Fase 3 (em andamento) — branch `feature/propostas-eventos-lotes`:**
 
-**Fase 3 (não iniciada):** carregar `proposta.csv`, `evento_lic.csv`,
-`lote.csv` para análise de competição/cartel e linha do tempo de licitações.
+1. **3 loaders novos**: `load_propostas.py`, `load_propostas_itens.py`,
+   `load_eventos.py`.
+2. **3 tabelas novas**: `propostas`, `propostas_itens`, `eventos_licitacao`.
+3. **3 views novas**: `vw_proposta_unica`, `vw_cover_bidding_indicios`,
+   `vw_alteracao_apos_abertura`.
+4. **Testes**: `test_propostas_eventos.py` cobre chaves compostas, códigos
+   conhecidos e consistência das views.
+5. **`docs/exemplos_queries.sql`**: queries de cover bidding, proposta única,
+   alteração de edital.
+6. **`docs/dicionario_dados.md`**: documento de handoff pra quem fará o
+   score de risco — todas as 8 tabelas com semântica e red flags por coluna.
+
+**Fase 4 (não iniciada):** carregar `lote.csv` e `lote_prop.csv` para
+análise por lote (granularidade intermediária). Score de risco consolidando
+indícios `indicio_*` em score 0-100 fica com outro membro do time.
 
 Trabalhe em **incrementos pequenos e testáveis**. Rode o código a cada etapa; não escreva
 o pipeline todo de uma vez. Se um arquivo for grande demais pra carregar na memória, leia
@@ -335,9 +390,14 @@ duckdb db/dados.duckdb
 - [x] `README.md` explica como reconstruir o banco do zero.
 - [x] `docs/inventario_fontes.md` documenta as colunas reais de cada fonte.
 
-### Fase 2 (sobrepreço) — em andamento
-- [ ] Tabela `itens` existe com 1 linha por (licitação × lote × item).
-- [ ] `descricao_normalizada` agrupa o suficiente para análise estatística
-      (≥ 100 grupos com massa ≥ 10).
-- [ ] `vw_sobrepreco_indicios` devolve resultados não-triviais (≥ 50 linhas).
-- [ ] Testes 100% verdes (existentes + novos de `itens`).
+### Fase 2 (sobrepreço) — ✅ concluída
+- [x] Tabela `itens` existe com 1 linha por (licitação × lote × item).
+- [x] `descricao_normalizada` agrupa o suficiente (1.246 grupos com massa ≥ 10).
+- [x] `vw_sobrepreco_indicios` devolve resultados não-triviais (164 indícios).
+- [x] Testes 100% verdes.
+
+### Fase 3 (propostas + eventos) — em andamento
+- [ ] Tabelas `propostas`, `propostas_itens`, `eventos_licitacao` com chaves compostas únicas.
+- [ ] Views `vw_proposta_unica`, `vw_cover_bidding_indicios`, `vw_alteracao_apos_abertura` devolvem resultados não-triviais.
+- [ ] `docs/dicionario_dados.md` cobre as 8 tabelas + 7 views com semântica e red flags.
+- [ ] Testes 100% verdes (existentes + novos).
