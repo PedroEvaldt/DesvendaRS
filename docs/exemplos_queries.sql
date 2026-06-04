@@ -182,3 +182,82 @@ SELECT c.orgao,
  GROUP BY c.orgao, c.municipio
  ORDER BY qtd_indicios DESC, razao_pico DESC
  LIMIT 30;
+
+------------------------------------------------------------------
+-- 11. Top indícios de cover bidding (Fase 3)
+--    Vencedora barata + segunda proposta absurdamente alta sugere que
+--    a segunda foi "carta marcada" pra fazer cara de competição.
+------------------------------------------------------------------
+
+SELECT cd_orgao,
+       nr_licitacao,
+       ano_licitacao,
+       n_classificadas,
+       cnpj_vencedora,
+       valor_vencedora,
+       cnpj_segunda,
+       valor_segunda,
+       razao_2a_vs_1a
+  FROM vw_cover_bidding_indicios
+ ORDER BY razao_2a_vs_1a DESC
+ LIMIT 30;
+
+------------------------------------------------------------------
+-- 12. Licitações com proposta única classificada cruzadas com sanção
+------------------------------------------------------------------
+
+SELECT pu.cd_orgao, pu.nr_licitacao, pu.ano_licitacao,
+       p.cnpj_proposta,
+       p.valor_total_proposta,
+       s.tipo_sancao,
+       s.fonte
+  FROM vw_proposta_unica pu
+  JOIN propostas p
+    ON p.cd_orgao = pu.cd_orgao
+   AND p.nr_licitacao = pu.nr_licitacao
+   AND p.ano_licitacao = pu.ano_licitacao
+   AND p.cd_tipo_modalidade = pu.cd_tipo_modalidade
+   AND p.resultado_proposta = 'C'
+  JOIN sancoes s ON s.cnpj = p.cnpj_proposta
+ ORDER BY p.valor_total_proposta DESC NULLS LAST
+ LIMIT 50;
+
+------------------------------------------------------------------
+-- 13. Licitações com alteração de edital após abertura
+--    AED = alteração de edital. REE = republicação.
+--    Dias_apos_publicacao alto pode indicar mudança suspeita de regras.
+------------------------------------------------------------------
+
+SELECT cd_orgao, nr_licitacao, ano_licitacao,
+       cd_tipo_evento,
+       data_publicacao,
+       data_alteracao,
+       dias_apos_publicacao
+  FROM vw_alteracao_apos_abertura
+ ORDER BY dias_apos_publicacao DESC
+ LIMIT 30;
+
+------------------------------------------------------------------
+-- 14. Empresas com competidores frequentes
+--    (sócios em comum + sempre concorrendo na MESMA licitação =
+--     forte sinal de cartel)
+------------------------------------------------------------------
+
+WITH par_competidores AS (
+    SELECT p1.cnpj_proposta AS cnpj_a,
+           p2.cnpj_proposta AS cnpj_b,
+           COUNT(*) AS qtd_licitacoes_juntos
+      FROM propostas p1
+      JOIN propostas p2
+        ON p1.cd_orgao = p2.cd_orgao
+       AND p1.nr_licitacao = p2.nr_licitacao
+       AND p1.ano_licitacao = p2.ano_licitacao
+       AND p1.cd_tipo_modalidade = p2.cd_tipo_modalidade
+       AND p1.cnpj_proposta < p2.cnpj_proposta
+     GROUP BY 1, 2
+    HAVING COUNT(*) >= 5
+)
+SELECT cnpj_a, cnpj_b, qtd_licitacoes_juntos
+  FROM par_competidores
+ ORDER BY qtd_licitacoes_juntos DESC
+ LIMIT 30;

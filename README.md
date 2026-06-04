@@ -2,8 +2,8 @@
 
 Camada de dados do projeto DesvendaRS (MaratonaColab 2026 / SBSC). Lê CSVs públicos
 de gastos governamentais já baixados em `data/raw/`, normaliza e gera um único
-**DuckDB** (`db/dados.duckdb`) com 5 tabelas integradas por CNPJ + chave de
-licitação e 4 views de cruzamento — consumido pelo restante do time (painel,
+**DuckDB** (`db/dados.duckdb`) com 8 tabelas integradas por CNPJ + chave de
+licitação e 7 views de red flags — consumido pelo restante do time (painel,
 score de risco, busca por IA).
 
 > **Postura do projeto:** levantamos **indícios**, não acusações. Todo nome de
@@ -45,11 +45,14 @@ uv run python -m etl.build_db
 O comando:
 1. Remove `db/dados.duckdb` se existir.
 2. Lê e normaliza cada fonte (loaders em `etl/load_*.py`).
-3. Cria as 5 tabelas (`contratos`, `empresas`, `socios`, `sancoes`, `itens`) e
-   4 views de cruzamento (`vw_contratos_homologados`, `vw_contratos_com_sancao`,
-   `vw_empresas_sancionadas`, `vw_sobrepreco_indicios`).
+3. Cria as 8 tabelas (`contratos`, `empresas`, `socios`, `sancoes`, `itens`,
+   `propostas`, `propostas_itens`, `eventos_licitacao`) e 7 views de red flags
+   (`vw_contratos_homologados`, `vw_contratos_com_sancao`, `vw_empresas_sancionadas`,
+   `vw_sobrepreco_indicios`, `vw_proposta_unica`, `vw_cover_bidding_indicios`,
+   `vw_alteracao_apos_abertura`).
 4. Imprime relatório de qualidade (contagens, CNPJs distintos, cardinalidade dos
-   JOINs entre tabelas, grupos com massa estatística e indícios de sobrepreço).
+   JOINs, grupos com massa estatística, indícios de sobrepreço, indícios de cover
+   bidding e propostas únicas).
 
 Tempo típico: **~2,5 min** num SSD com 16 GB de RAM.
 
@@ -67,9 +70,11 @@ Cobre:
 - `tests/test_joins.py` — cardinalidade dos cruzamentos por CNPJ
 - `tests/test_itens.py` — chave composta única, normalização de descrição,
   view de sobrepreço
+- `tests/test_propostas_eventos.py` — Fase 3: chaves compostas, códigos de
+  resultado, consistência das views (cover bidding, proposta única, alteração)
 
-Os testes de schema/joins/itens **dependem** do banco gerado pelo `build_db`; se
-ele ainda não foi rodado, são automaticamente skipados.
+Os testes de schema/joins/itens/propostas **dependem** do banco gerado pelo
+`build_db`; se ele ainda não foi rodado, são automaticamente skipados.
 
 ---
 
@@ -94,18 +99,23 @@ SELECT * FROM vw_contratos_com_sancao LIMIT 20;
 
 Definido pela Seção 6 do [`CLAUDE.md`](./CLAUDE.md). Resumo:
 
-| Tabela     | Chave                                                       | Origem                          |
-|------------|-------------------------------------------------------------|---------------------------------|
-| `contratos`| `cnpj_fornecedor`                                           | LicitaCon (licitacao + licitante + pessoas) |
-| `empresas` | `cnpj`                                                      | Receita — `Dados-Empresas-RS.csv` |
-| `socios`   | `cnpj`                                                      | Receita — `Socios-RS.csv` (`doc_socio` permanece mascarado) |
-| `sancoes`  | `cnpj`                                                      | CEIS + CNEP + CFIL/RS empilhados (coluna `fonte` indica origem) |
-| `itens`    | `(cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade, nr_lote, nr_item)` | LicitaCon — `item.csv`; base da análise de sobrepreço |
+| Tabela | Chave | Origem | Fase |
+|---|---|---|---|
+| `contratos` | `cnpj_fornecedor` | LicitaCon (licitacao + licitante + pessoas) | 1 |
+| `empresas` | `cnpj` | Receita — `Dados-Empresas-RS.csv` | 1 |
+| `socios` | `cnpj` | Receita — `Socios-RS.csv` (`doc_socio` mascarado) | 1 |
+| `sancoes` | `cnpj` | CEIS + CNEP + CFIL/RS empilhados (coluna `fonte`) | 1 |
+| `itens` | chave composta licitação + `nr_lote` + `nr_item` | LicitaCon — `item.csv`; base de sobrepreço | 2 |
+| `propostas` | chave composta licitação + `cnpj_proposta` | LicitaCon — `proposta.csv`; base de cover bidding | 3 |
+| `propostas_itens` | chave composta licitação + `nr_lote` + `nr_item` + `cnpj_proposta` | LicitaCon — `item_prop.csv` | 3 |
+| `eventos_licitacao` | chave composta licitação + `sq_evento` | LicitaCon — `evento_lic.csv`; linha do tempo | 3 |
 
-Todas as chaves de CNPJ passam por `etl/normalize.limpar_cnpj` — 14 dígitos, sem
-pontuação, com zeros à esquerda preservados. `itens.descricao_normalizada` passa
-por `etl/normalize.normalizar_descricao_item` para permitir agrupamento por
-produto entre licitações diferentes.
+Detalhes de cada coluna estão em [`docs/dicionario_dados.md`](docs/dicionario_dados.md) —
+documento de handoff pro time que fará o score de risco.
+
+Todas as chaves de CNPJ passam por `etl/normalize.limpar_cnpj` (14 dígitos, sem
+pontuação). `itens.descricao_normalizada` passa por `normalizar_descricao_item`
+para permitir agrupamento por produto entre licitações.
 
 ---
 
@@ -115,22 +125,27 @@ produto entre licitações diferentes.
 config.py                  paths das fontes e do banco
 etl/
   normalize.py             funções puras (CNPJ, data, valor, texto, descrição de item)
-  load_contratos.py
-  load_empresas.py
-  load_socios.py
-  load_sancoes.py
-  load_itens.py            Fase 2 — base de sobrepreço
+  load_contratos.py        ─┐
+  load_empresas.py          │ Fase 1
+  load_socios.py            │
+  load_sancoes.py          ─┘
+  load_itens.py             Fase 2 — base de sobrepreço
+  load_propostas.py         ─┐
+  load_propostas_itens.py    │ Fase 3 — cover bidding, proposta única, timeline
+  load_eventos.py            │
   build_db.py              orquestrador → db/dados.duckdb
 scripts/
   inventario.py            gera docs/inventario_fontes.md
 docs/
   inventario_fontes.md     cabeçalhos reais e % de nulos por CSV
-  exemplos_queries.sql     10 queries prontas (sobrepreço, sanção, COVID, etc.)
+  exemplos_queries.sql     14 queries prontas (sanção, sobrepreço, cover bidding, cartel)
+  dicionario_dados.md      handoff: todas as tabelas/views, atributos, red flags
 tests/
   test_normalize.py
   test_schema.py
   test_joins.py
   test_itens.py
+  test_propostas_eventos.py
 ```
 
 ---
