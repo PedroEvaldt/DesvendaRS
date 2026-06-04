@@ -17,6 +17,13 @@ CSV_ITEM = DATA_RAW / "item.csv"
 CSV_LICITANTE = DATA_RAW / "licitante.csv"
 CSV_ITENS = DATA_RAW / "item.csv"  # alias semântico para o loader de itens
 
+# Fase 3 — propostas, eventos, lotes
+CSV_PROPOSTA = DATA_RAW / "proposta.csv"
+CSV_ITEM_PROP = DATA_RAW / "item_prop.csv"
+CSV_EVENTO_LIC = DATA_RAW / "evento_lic.csv"
+CSV_LOTE = DATA_RAW / "lote.csv"
+CSV_LOTE_PROP = DATA_RAW / "lote_prop.csv"
+
 CSV_EMPRESAS = DATA_RAW / "Dados-Empresas-RS.csv"
 CSV_SOCIOS = DATA_RAW / "Socios-RS.csv"
 
