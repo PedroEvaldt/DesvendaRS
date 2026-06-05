@@ -341,7 +341,7 @@ Cada um vira uma coluna `indicio_*` ou `alerta_*` no score, com pontuação a ca
 | `indicio_sancionado_historico` | EXISTS em `sancoes` em qualquer momento | +15 |
 | `indicio_empresa_jovem_contrato_grande` | `(data_contrato - data_abertura) < 180 AND valor_contrato > 100k` | +10 |
 | `indicio_empresa_inativa_com_contrato` | `situacao_cadastral` ≠ ativa + contrato recente | +20 |
-| `indicio_capital_baixo` | `valor_contrato / capital_social > 10` | +10 |
+| `indicio_capital_baixo` | `valor_contrato / capital_social > 1` | +10 |
 | `indicio_socio_comum_competidores` | mesmo `doc_socio` em fornecedores que concorreram na mesma licitação | +20 |
 | `indicio_cartel_recorrente` | par de CNPJs concorre em ≥ 5 licitações juntas | +10 |
 
