@@ -3,8 +3,8 @@
 Camada de dados do projeto DesvendaRS (MaratonaColab 2026 / SBSC). Lê CSVs públicos
 de gastos governamentais já baixados em `data/raw/`, normaliza e gera um único
 **DuckDB** (`db/dados.duckdb`) com 8 tabelas integradas por CNPJ + chave de
-licitação e 7 views de red flags — consumido pelo restante do time (painel,
-score de risco, busca por IA).
+licitação, 7 views de red flags e tabelas de score explicável — consumido pelo
+restante do time (painel, score de risco, busca por IA).
 
 > **Postura do projeto:** levantamos **indícios**, não acusações. Todo nome de
 > coluna, flag e mensagem usa linguagem de hipótese. Padrão estranho ≠ culpa.
@@ -50,9 +50,11 @@ O comando:
    (`vw_contratos_homologados`, `vw_contratos_com_sancao`, `vw_empresas_sancionadas`,
    `vw_sobrepreco_indicios`, `vw_proposta_unica`, `vw_cover_bidding_indicios`,
    `vw_alteracao_apos_abertura`).
-4. Imprime relatório de qualidade (contagens, CNPJs distintos, cardinalidade dos
+4. Calcula red flags, grava `redflag_eventos`, agrega `scores_fornecedor`,
+   `scores_licitacao`, `scores_item` e expõe `vw_possivel_fraude`.
+5. Imprime relatório de qualidade (contagens, CNPJs distintos, cardinalidade dos
    JOINs, grupos com massa estatística, indícios de sobrepreço, indícios de cover
-   bidding e propostas únicas).
+   bidding, propostas únicas e entidades com `score_bruto >= 100`).
 
 Tempo típico: **~2,5 min** num SSD com 16 GB de RAM.
 
@@ -91,6 +93,9 @@ SELECT COUNT(DISTINCT cnpj_fornecedor)
 
 -- Fornecedores com contrato em RS que estão em alguma lista de sanção:
 SELECT * FROM vw_contratos_com_sancao LIMIT 20;
+
+-- Entidades cujo score bruto atingiu o limiar de possível fraude:
+SELECT * FROM vw_possivel_fraude ORDER BY score_bruto DESC LIMIT 20;
 ```
 
 ---
@@ -109,6 +114,10 @@ Definido pela Seção 6 do [`CLAUDE.md`](./CLAUDE.md). Resumo:
 | `propostas` | chave composta licitação + `cnpj_proposta` | LicitaCon — `proposta.csv`; base de cover bidding | 3 |
 | `propostas_itens` | chave composta licitação + `nr_lote` + `nr_item` + `cnpj_proposta` | LicitaCon — `item_prop.csv` | 3 |
 | `eventos_licitacao` | chave composta licitação + `sq_evento` | LicitaCon — `evento_lic.csv`; linha do tempo | 3 |
+| `redflag_eventos` | `escopo` + `entidade_id` + `sinal` | Eventos explicáveis de red flag calculados no DuckDB | Score |
+| `scores_fornecedor` | `cnpj` | Score agregado por fornecedor | Score |
+| `scores_licitacao` | chave composta licitação | Score agregado por licitação | Score |
+| `scores_item` | chave composta licitação + lote + item | Score agregado por item | Score |
 
 Detalhes de cada coluna estão em [`docs/dicionario_dados.md`](docs/dicionario_dados.md) —
 documento de handoff pro time que fará o score de risco.
@@ -133,6 +142,7 @@ etl/
   load_propostas.py         ─┐
   load_propostas_itens.py    │ Fase 3 — cover bidding, proposta única, timeline
   load_eventos.py            │
+  score_redflags.py          calcula red flags e scores explicáveis
   build_db.py              orquestrador → db/dados.duckdb
 scripts/
   inventario.py            gera docs/inventario_fontes.md

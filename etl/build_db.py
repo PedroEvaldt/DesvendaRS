@@ -3,8 +3,9 @@
 Saída: `db/dados.duckdb` com 8 tabelas (`contratos`, `empresas`, `socios`,
 `sancoes`, `itens`, `propostas`, `propostas_itens`, `eventos_licitacao`) e
 7 views (sanção, sobrepreço, cover bidding, proposta única, alteração de
-edital). Ao final, imprime um relatório de qualidade com contagens, % de
-nulos nas colunas-chave e tamanho dos JOINs entre tabelas.
+edital). Depois calcula red flags e scores em tabelas próprias. Ao final,
+imprime um relatório de qualidade com contagens, % de nulos nas colunas-chave,
+tamanho dos JOINs entre tabelas e alertas com score alto.
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ from etl.load_propostas import load_propostas
 from etl.load_propostas_itens import load_propostas_itens
 from etl.load_sancoes import load_sancoes
 from etl.load_socios import load_socios
+from etl.score_redflags import criar_tabelas_score
 
 log = logging.getLogger(__name__)
 
@@ -203,6 +205,7 @@ VIEWS = {
         SELECT i.cd_orgao, i.nr_licitacao, i.ano_licitacao,
                i.cd_tipo_modalidade, i.nr_lote, i.nr_item,
                i.cnpj_fornecedor, i.descricao, i.unidade,
+               i.flag_covid,
                i.valor_unitario_homologado,
                g.mediana,
                g.n_obs,
@@ -419,6 +422,27 @@ def _relatorio_qualidade(con: duckdb.DuckDBPyConnection) -> None:
     print(f"  licitações com proposta única classificada: {p_unica:>9,}".replace(",", "."))
     print(f"  indícios de cover bidding (razão>=2x):       {p_cover:>9,}".replace(",", "."))
     print(f"  eventos de alteração após abertura:          {p_alt:>9,}".replace(",", "."))
+
+    print()
+    print("Scores de red flags:")
+    total_eventos = con.execute("SELECT COUNT(*) FROM redflag_eventos").fetchone()[0]
+    possiveis = con.execute("SELECT COUNT(*) FROM vw_possivel_fraude").fetchone()[0]
+    print(f"  eventos de red flag gravados:                {total_eventos:>9,}".replace(",", "."))
+    print(f"  entidades com score_bruto >= 100:            {possiveis:>9,}".replace(",", "."))
+    top_scores = con.execute(
+        """
+        SELECT escopo, entidade_id, score_bruto, score, qtd_sinais
+          FROM vw_possivel_fraude
+         ORDER BY score_bruto DESC, qtd_sinais DESC
+         LIMIT 5
+        """
+    ).fetchall()
+    for escopo, entidade_id, score_bruto, score, qtd_sinais in top_scores:
+        print(
+            "    "
+            f"{escopo:10s} score_bruto={score_bruto:>4} score={score:>3} "
+            f"sinais={qtd_sinais:>2} entidade={entidade_id}"
+        )
     print("=" * 70)
 
 
@@ -457,6 +481,7 @@ def main() -> None:
             log.info("Criando view %s", nome)
             con.execute(f"DROP VIEW IF EXISTS {nome}")
             con.execute(sql)
+        criar_tabelas_score(con)
         _relatorio_qualidade(con)
     finally:
         con.close()
