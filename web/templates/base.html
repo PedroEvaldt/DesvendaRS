@@ -34,11 +34,11 @@
       </button>
 
       <nav id="menu-principal" class="main-nav" aria-label="Navegação principal">
-        <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>
-          Empresas
-        </a>
         <a href="/licitacoes" {% if request.url.path.startswith("/licitacoes") %}aria-current="page"{% endif %}>
           Licitações
+        </a>
+        <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>
+          Empresas
         </a>
         <span class="data-chip"><i></i> Dados públicos do RS</span>
       </nav>

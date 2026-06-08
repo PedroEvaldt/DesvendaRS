@@ -139,13 +139,10 @@ def load_contratos(
     df["ano_licitacao"] = df["ANO_LICITACAO"].map(normalizar_texto)
     df["cd_tipo_modalidade"] = df["CD_TIPO_MODALIDADE"].map(normalizar_texto)
 
-    # Vencedor oficial homologado da licitação (só quando é pessoa jurídica)
-    df["cnpj_vencedor"] = df.apply(
-        lambda r: limpar_cnpj(r["NR_DOCUMENTO_VENCEDOR"])
-        if r["TP_DOCUMENTO_VENCEDOR"] == "J"
-        else None,
-        axis=1,
-    )
+    # Vencedor oficial homologado da licitação. No LicitaCon 2026,
+    # NR_DOCUMENTO_VENCEDOR vem quase sempre vazio; nesses casos,
+    # NR_DOCUMENTO_FORNECEDOR é o melhor identificador PJ disponível.
+    df["cnpj_vencedor"] = df.apply(_cnpj_vencedor_oficial, axis=1)
 
     # Normalizações finais
     df["modalidade"] = df["CD_TIPO_MODALIDADE"].map(normalizar_texto)
@@ -189,6 +186,17 @@ def _extrair_municipio(orgao: object) -> str | None:
         return None
     m = _RE_MUNICIPIO.match(str(orgao))
     return m.group(1).strip() if m else None
+
+
+def _cnpj_vencedor_oficial(row: pd.Series) -> str | None:
+    """CNPJ da vencedora: campo vencedor primeiro, fornecedor como fallback."""
+    if row["TP_DOCUMENTO_VENCEDOR"] == "J":
+        cnpj = limpar_cnpj(row["NR_DOCUMENTO_VENCEDOR"])
+        if cnpj:
+            return cnpj
+    if row["TP_DOCUMENTO_FORNECEDOR"] == "J":
+        return limpar_cnpj(row["NR_DOCUMENTO_FORNECEDOR"])
+    return None
 
 
 def _para_bool(valor: object) -> bool | None:
