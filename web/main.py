@@ -167,6 +167,10 @@ def home(request: Request, q: str | None = None) -> HTMLResponse:
                 "empresas": _registros(empresas),
                 "busca": q or "",
                 "tem_score": queries.has_score_tables(status),
+                "tem_panorama": queries.has_licitacao_scores(status),
+                "distribuicao": _registros(queries.distribuicao_scores(con, status)),
+                "top_orgaos": _registros(queries.orgaos_mais_alertas(con, status)),
+                "top_municipios": _registros(queries.municipios_mais_alertas(con, status)),
             },
         )
 
@@ -254,6 +258,9 @@ def licitacao(
                 "cabecalho": _primeiro(detalhe["cabecalho"]),
                 "empresa": _primeiro(detalhe["empresa"]),
                 "sinais": detalhe["sinais"],
+                "alertas": _registros(detalhe["alertas"]),
+                "score": _primeiro(detalhe["score"]),
+                "timeline": detalhe["timeline"],
                 "sancoes": _registros(detalhe["sancoes"]),
                 "participantes": _registros(detalhe["contratos"]),
                 "perdedoras": _registros(detalhe["perdedoras"]),

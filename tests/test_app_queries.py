@@ -241,3 +241,96 @@ def test_empresa_dossie_traz_sinais_com_descricao(mock_db):
     assert not dossie["eventos"].empty
     assert "descricao" in dossie["eventos"].columns
     assert not dossie["sancoes"].empty
+
+
+CHAVE_PELOTAS = {
+    "cd_orgao": "003",
+    "nr_licitacao": "300",
+    "ano_licitacao": "2026",
+    "cd_tipo_modalidade": "PRE",
+}
+
+
+def test_score_licitacao_traz_score_pela_chave(mock_db):
+    con, status = mock_db
+    df = queries.score_licitacao(con, status, CHAVE_PELOTAS)
+    assert not df.empty
+    linha = df.iloc[0]
+    assert linha["score"] > 0
+    assert linha["qtd_sinais"] >= 1
+
+
+def test_alertas_licitacao_tem_severidade_descricao_evidencia(mock_db):
+    con, status = mock_db
+    df = queries.alertas_licitacao(con, status, CHAVE_PELOTAS)
+    assert not df.empty
+    for coluna in ("descricao", "evidencia", "severidade", "forca"):
+        assert coluna in df.columns
+    assert set(df["severidade"]).issubset({"alto", "medio", "baixo"})
+    # cover bidding é um dos alertas dessa licitação
+    assert df["sinal"].str.contains("cover_bidding").any()
+
+
+def test_timeline_licitacao_ordenada_por_data(mock_db):
+    con, status = mock_db
+    etapas = queries.timeline_licitacao(con, status, CHAVE_PELOTAS)
+    assert [e["etapa"] for e in etapas][0] == "Publicação do edital"
+    assert any(e["etapa"] == "Contratação" for e in etapas)
+    datas = [e["data"] for e in etapas]
+    assert datas == sorted(datas)  # cronológica
+
+
+def test_distribuicao_scores_devolve_dez_faixas(mock_db):
+    con, status = mock_db
+    df = queries.distribuicao_scores(con, status)
+    assert list(df["faixa"]) == list(range(0, 100, 10))
+    assert df["n"].sum() > 0
+
+
+def test_distribuicao_scores_inclui_limite_superior_na_faixa_90(tmp_path):
+    con = duckdb.connect()
+    con.execute("CREATE TABLE scores_licitacao (score INTEGER)")
+    con.execute("INSERT INTO scores_licitacao VALUES (90), (95), (99), (100)")
+    status = DatabaseStatus(
+        path=tmp_path / "mock.duckdb",
+        exists=True,
+        tables={"scores_licitacao"},
+        views=set(),
+    )
+    try:
+        df = queries.distribuicao_scores(con, status)
+    finally:
+        con.close()
+
+    faixa_90 = df.loc[df["faixa"] == 90, "n"].item()
+    assert faixa_90 == 4
+    assert df["n"].sum() == 4
+
+
+def test_orgaos_mais_alertas_ordena_desc(mock_db):
+    con, status = mock_db
+    df = queries.orgaos_mais_alertas(con, status)
+    assert not df.empty
+    assert {"orgao", "qtd_alertas"}.issubset(df.columns)
+    assert list(df["qtd_alertas"]) == sorted(df["qtd_alertas"], reverse=True)
+
+
+def test_municipios_mais_alertas_traz_pelotas(mock_db):
+    con, status = mock_db
+    df = queries.municipios_mais_alertas(con, status)
+    assert not df.empty
+    assert "PELOTAS" in set(df["municipio"])
+    assert list(df["qtd_alertas"]) == sorted(df["qtd_alertas"], reverse=True)
+
+
+def test_panorama_degrada_sem_tabelas_de_score(mock_db):
+    con, status = mock_db
+    sem_score = DatabaseStatus(
+        path=status.path,
+        exists=status.exists,
+        tables=status.tables - {"scores_licitacao"},
+        views=status.views,
+    )
+    assert queries.distribuicao_scores(con, sem_score)["n"].sum() == 0
+    assert queries.orgaos_mais_alertas(con, sem_score).empty
+    assert queries.municipios_mais_alertas(con, sem_score).empty

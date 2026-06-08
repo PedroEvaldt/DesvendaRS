@@ -594,6 +594,170 @@ svg { display: block; }
 .footer-note p { margin: .35rem 0 0; font-size: .75rem; line-height: 1.6; }
 .footer-meta { display: grid; gap: .35rem; color: #8fa5b7; font-size: .7rem; text-align: right; }
 
+/* Severidade (badges + contadores) ------------------------------------- */
+.sev-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .22rem .5rem;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.sev-alto { color: #982d3d; background: var(--danger-soft); }
+.sev-medio { color: #875b0f; background: #fff3d2; }
+.sev-baixo { color: #256347; background: var(--success-soft); }
+.sev-summary { display: flex; flex-wrap: wrap; gap: .4rem; }
+.sev-alto-text { color: var(--danger); }
+.sev-medio-text { color: var(--warning); }
+.sev-baixo-text { color: var(--success); }
+
+/* Cartões de alerta (dossiê da licitação) ------------------------------- */
+.alert-cards { display: grid; gap: .7rem; margin: 0; padding: 0; list-style: none; }
+.alert-card {
+  padding: .9rem 1rem;
+  background: #fbfcfc;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--muted);
+  border-radius: .7rem;
+}
+.alert-card--alto { background: #fffafa; border-color: #f3d6da; border-left-color: var(--danger); }
+.alert-card--medio { background: #fffdf6; border-color: #f0e4c2; border-left-color: var(--warning); }
+.alert-card--baixo { background: #f6fbf8; border-color: #d8eadf; border-left-color: var(--success); }
+.alert-card__head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.alert-card__head strong { font-size: .9rem; }
+.alert-card__evidence {
+  margin: .5rem 0 0;
+  color: var(--muted);
+  font-size: .76rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Linha do tempo -------------------------------------------------------- */
+.timeline { margin: 0; padding: .2rem 0 0 .25rem; list-style: none; }
+.timeline__item { position: relative; display: grid; grid-template-columns: 16px 1fr; gap: .9rem; padding: 0 0 1.3rem; }
+.timeline__item:last-child { padding-bottom: 0; }
+.timeline__item::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 1.15rem;
+  bottom: 0;
+  width: 2px;
+  background: var(--line);
+}
+.timeline__item:last-child::before { display: none; }
+.timeline__dot {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  margin-top: .2rem;
+  background: var(--brand);
+  border: 3px solid var(--brand-soft);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--brand);
+}
+.timeline__body strong { font-size: .9rem; }
+.timeline__body p { margin: .2rem 0 .35rem; color: var(--muted); font-size: .8rem; }
+.timeline__body time { color: var(--ink-soft); font-size: .72rem; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* Gauge de score (aside) ------------------------------------------------ */
+.score-card { text-align: center; }
+.gauge { position: relative; width: 100%; max-width: 240px; margin: .3rem auto 0; }
+.gauge svg { width: 100%; height: auto; overflow: visible; }
+.gauge__track, .gauge__value { fill: none; stroke-width: 16; stroke-linecap: round; }
+.gauge__track { stroke: var(--line-soft); }
+.gauge__value { stroke: var(--muted); transition: stroke-dasharray .6s ease; }
+.gauge--alto .gauge__value { stroke: var(--danger); }
+.gauge--medio .gauge__value { stroke: var(--warning); }
+.gauge--baixo .gauge__value { stroke: var(--success); }
+.gauge--sem-indicio .gauge__value { stroke: var(--line); }
+.gauge__readout { position: absolute; left: 0; right: 0; bottom: 4%; }
+.gauge__readout strong { font-size: 2.6rem; line-height: 1; letter-spacing: -.045em; }
+.gauge__readout span { color: var(--muted); font-size: .9rem; font-weight: 700; }
+.gauge__caption { margin: .25rem 0 0; font-size: .82rem; font-weight: 750; }
+.gauge__caption--alto { color: #982d3d; }
+.gauge__caption--medio { color: #875b0f; }
+.gauge__caption--baixo { color: #256347; }
+.gauge__caption--sem-indicio { color: var(--muted); }
+.sev-tally {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .5rem;
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line-soft);
+}
+.sev-tally__item { display: grid; gap: .12rem; }
+.sev-tally__item strong { font-size: 1.3rem; line-height: 1; }
+.sev-tally__item span { color: var(--muted); font-size: .64rem; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
+.detail-aside .score-card { grid-column: 1 / -1; }
+
+/* Panorama de risco (home) — gráfico de barras --------------------------- */
+.chart-bars {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: .5rem;
+  align-items: stretch;
+  height: 210px;
+  margin-top: .4rem;
+}
+.chart-bar { display: grid; grid-template-rows: auto 1fr auto; gap: .4rem; justify-items: center; height: 100%; }
+.chart-bar__track { display: flex; align-items: flex-end; width: 100%; max-width: 36px; height: 100%; }
+.chart-bar__fill { width: 100%; min-height: 3px; border-radius: 6px 6px 0 0; background: var(--muted); transition: height .5s ease; }
+.chart-bar__fill--alto { background: var(--danger); }
+.chart-bar__fill--medio { background: var(--warning); }
+.chart-bar__fill--baixo { background: var(--brand); }
+.chart-bar__count { font-size: .74rem; font-weight: 750; color: var(--ink-soft); }
+.chart-bar__label { font-size: .58rem; color: var(--muted); font-weight: 650; white-space: nowrap; }
+
+/* Panorama de risco — rankings horizontais ------------------------------ */
+.panorama-rankings { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem; margin-top: 1.25rem; }
+.rank-list { display: grid; gap: .6rem; margin: .2rem 0 0; padding: 0; list-style: none; }
+.rank-row { display: grid; grid-template-columns: 18px minmax(80px, 1.1fr) minmax(0, 1.6fr) auto; align-items: center; gap: .7rem; }
+.rank-row__pos { color: var(--muted); font-size: .76rem; font-weight: 750; text-align: right; }
+.rank-row__name { display: flex; align-items: center; gap: .35rem; font-size: .82rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-row__pin { width: 14px; flex: 0 0 auto; color: var(--brand); }
+.rank-row__bar { height: 9px; background: var(--line-soft); border-radius: 999px; overflow: hidden; }
+.rank-row__fill { display: block; height: 100%; border-radius: 999px; background: var(--brand); transition: width .5s ease; }
+.rank-row__fill--orgao { background: var(--brand); }
+.rank-row__fill--municipio { background: #2aa879; }
+.rank-row__value { min-width: 28px; text-align: right; font-size: .82rem; font-weight: 800; color: var(--ink); }
+
+/* Seção Metodologia (escura) -------------------------------------------- */
+.methodology { padding: 3.5rem 0 4.5rem; background: var(--paper); }
+.methodology__card {
+  padding: clamp(1.6rem, 4vw, 2.6rem);
+  color: #dbe6ee;
+  background:
+    radial-gradient(circle at 88% -10%, rgba(31, 157, 133, .2), transparent 22rem),
+    #0c2236;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.method-tag {
+  display: inline-block;
+  padding: .3rem .7rem;
+  color: #9de0d3;
+  background: rgba(118, 212, 194, .12);
+  border: 1px solid rgba(118, 212, 194, .22);
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 750;
+}
+.methodology h2 { margin: 1rem 0 .6rem; color: white; font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -.04em; }
+.methodology__card > p { max-width: 780px; margin: 0; color: #aebfcd; font-size: .95rem; line-height: 1.6; }
+.methodology__card > p strong { color: #cfe8e1; }
+.method-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.8rem; }
+.method-card { padding: 1.2rem; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1); border-radius: var(--radius); }
+.method-card__top { display: flex; align-items: center; gap: .6rem; margin-bottom: .6rem; }
+.method-card__top strong { color: white; font-size: 1rem; }
+.method-card p { margin: 0; color: #9fb2c1; font-size: .83rem; line-height: 1.55; }
+
 @media (max-width: 920px) {
   .hero-grid { grid-template-columns: 1fr; gap: 2.2rem; }
   .hero-aside { max-width: 620px; }
@@ -602,6 +766,8 @@ svg { display: block; }
   .detail-aside { position: static; grid-template-columns: repeat(2, 1fr); }
   .footer-shell { grid-template-columns: 1fr 1.4fr; }
   .footer-meta { grid-column: 1 / -1; display: flex; justify-content: space-between; text-align: left; }
+  .panorama-rankings { grid-template-columns: 1fr; }
+  .method-cards { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
@@ -688,9 +854,14 @@ svg { display: block; }
   .table-card--responsive .data-table td::before { content: attr(data-label); color: var(--muted); font-size: .68rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; text-align: left; }
   .table-card--responsive .data-table td:first-child::before { display: none; }
   .table-card--responsive .cell-muted { max-width: 65%; }
+  .chart-bars { height: 170px; gap: .35rem; }
+  .chart-bar__label { font-size: .52rem; }
 }
 
 @media (max-width: 480px) {
+  .chart-bars { gap: .25rem; }
+  .chart-bar__count { font-size: .64rem; }
+  .rank-row { grid-template-columns: 16px minmax(70px, 1fr) minmax(0, 1.3fr) auto; gap: .5rem; }
   .metrics-grid { grid-template-columns: 1fr; }
   .metric-card { min-height: 122px; }
   .page-hero { padding: 2.6rem 0 3.5rem; }
