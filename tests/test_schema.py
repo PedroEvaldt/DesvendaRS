@@ -18,6 +18,11 @@ ESQUEMA_ESPERADO = {
         "numero_contrato": "VARCHAR",
         "qtd_participantes": "INTEGER",
         "flag_covid": "BOOLEAN",
+        "cd_orgao": "VARCHAR",
+        "nr_licitacao": "VARCHAR",
+        "ano_licitacao": "VARCHAR",
+        "cd_tipo_modalidade": "VARCHAR",
+        "cnpj_vencedor": "VARCHAR",
     },
     "empresas": {
         "cnpj": "VARCHAR",
@@ -132,6 +137,7 @@ def test_colunas_e_tipos(con, tabela, colunas_esperadas):
     "tabela,coluna",
     [
         ("contratos", "cnpj_fornecedor"),
+        ("contratos", "cnpj_vencedor"),
         ("empresas", "cnpj"),
         ("socios", "cnpj"),
         ("sancoes", "cnpj"),

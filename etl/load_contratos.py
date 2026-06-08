@@ -96,6 +96,8 @@ def _carregar_licitacoes(path: Path) -> pd.DataFrame:
         "BL_COVID19",
         "TP_DOCUMENTO_FORNECEDOR",
         "NR_DOCUMENTO_FORNECEDOR",
+        "TP_DOCUMENTO_VENCEDOR",
+        "NR_DOCUMENTO_VENCEDOR",
     ]
     df = pd.read_csv(
         path,
@@ -130,6 +132,21 @@ def load_contratos(
     df = df.merge(mapa_pessoas, left_on="cnpj_fornecedor", right_on="cnpj", how="left")
     df = df.drop(columns=["cnpj"])
 
+    # Chave composta da licitação — normalizada IGUAL a load_propostas.py
+    # (normalizar_texto sem upper) para que o JOIN contratos↔propostas case.
+    df["cd_orgao"] = df["CD_ORGAO"].map(normalizar_texto)
+    df["nr_licitacao"] = df["NR_LICITACAO"].map(normalizar_texto)
+    df["ano_licitacao"] = df["ANO_LICITACAO"].map(normalizar_texto)
+    df["cd_tipo_modalidade"] = df["CD_TIPO_MODALIDADE"].map(normalizar_texto)
+
+    # Vencedor oficial homologado da licitação (só quando é pessoa jurídica)
+    df["cnpj_vencedor"] = df.apply(
+        lambda r: limpar_cnpj(r["NR_DOCUMENTO_VENCEDOR"])
+        if r["TP_DOCUMENTO_VENCEDOR"] == "J"
+        else None,
+        axis=1,
+    )
+
     # Normalizações finais
     df["modalidade"] = df["CD_TIPO_MODALIDADE"].map(normalizar_texto)
     df["orgao"] = df["NM_ORGAO"].map(normalizar_texto)
@@ -153,6 +170,11 @@ def load_contratos(
             "numero_contrato",
             "qtd_participantes",
             "flag_covid",
+            "cd_orgao",
+            "nr_licitacao",
+            "ano_licitacao",
+            "cd_tipo_modalidade",
+            "cnpj_vencedor",
         ]
     ]
     log.info(

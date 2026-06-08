@@ -1,8 +1,8 @@
-"""SQL queries used by the demo-first Streamlit app.
+"""Queries SQL reutilizadas pelo site DesvendaRS (independentes de framework).
 
-The database does not preserve the full licitation key on `contratos`, so the
-fallback risk queue intentionally mixes contract-level and supplier-level
-signals. Labels in the UI should describe those as indications for review.
+O banco não preserva a chave composta em algumas análises antigas, então parte das
+queries de fila de risco mistura sinais por contrato e por fornecedor. Os rótulos na
+interface devem sempre descrever isso como indícios para revisão humana.
 """
 from __future__ import annotations
 
@@ -57,6 +57,427 @@ def overview(con: duckdb.DuckDBPyConnection, status: DatabaseStatus) -> dict[str
             """,
         ).iloc[0]["n"]
     return metrics
+
+
+CHAVE_LICITACAO = ["cd_orgao", "nr_licitacao", "ano_licitacao", "cd_tipo_modalidade"]
+ORDENS_LICITACAO = {
+    "score": "score DESC NULLS LAST, l.valor_contrato DESC NULLS LAST",
+    "data": "l.data_contrato DESC NULLS LAST, score DESC NULLS LAST",
+    "valor": "l.valor_contrato DESC NULLS LAST, score DESC NULLS LAST",
+    "participantes": "l.qtd_participantes DESC NULLS LAST, score DESC NULLS LAST",
+}
+
+
+def has_score_tables(status: DatabaseStatus) -> bool:
+    """True quando o pipeline de red flags (etl/score_redflags) já rodou."""
+    return relation_exists(status, "scores_fornecedor")
+
+
+def has_licitacao_scores(status: DatabaseStatus) -> bool:
+    """True quando há scores calculados por chave composta de licitação."""
+    return relation_exists(status, "scores_licitacao")
+
+
+def top_empresas_risco(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+    *,
+    limit: int = 50,
+    busca: str | None = None,
+) -> pd.DataFrame:
+    """Ranking de empresas por quantidade de red flags e score (home do site).
+
+    Sai de `scores_fornecedor`; razão social vem de `empresas` (fallback `contratos`).
+    Ordena por mais sinais e maior score bruto. Devolve DataFrame vazio se o pipeline
+    de score ainda não rodou.
+    """
+    if not has_score_tables(status):
+        return pd.DataFrame()
+    params: list[Any] = []
+    where = ""
+    if busca:
+        termo = f"%{busca.strip()}%"
+        where = "WHERE (nome.razao_social ILIKE ? OR sf.cnpj ILIKE ?)"
+        params.extend([termo, termo])
+    params.append(limit)
+    return query_df(
+        con,
+        f"""
+        WITH nomes AS (
+            SELECT cnpj, ANY_VALUE(razao_social) AS razao_social
+              FROM empresas GROUP BY cnpj
+        ),
+        nomes_contrato AS (
+            SELECT cnpj_fornecedor AS cnpj, ANY_VALUE(razao_social) AS razao_social
+              FROM contratos WHERE cnpj_fornecedor IS NOT NULL GROUP BY cnpj_fornecedor
+        )
+        SELECT sf.cnpj,
+               COALESCE(nome.razao_social, nc.razao_social) AS razao_social,
+               sf.score, sf.score_bruto, sf.qtd_sinais, sf.sinais
+          FROM scores_fornecedor sf
+          LEFT JOIN nomes nome ON nome.cnpj = sf.cnpj
+          LEFT JOIN nomes_contrato nc ON nc.cnpj = sf.cnpj
+          {where}
+         ORDER BY sf.qtd_sinais DESC, sf.score_bruto DESC
+         LIMIT ?
+        """,
+        params,
+    )
+
+
+def empresa_dossie(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+    cnpj: str,
+) -> dict[str, Any]:
+    """Dossiê de uma empresa: score, sinais com evidência, cadastro, sanções e contratos."""
+    empresa = query_df(con, "SELECT * FROM empresas WHERE cnpj = ? LIMIT 1", [cnpj])
+
+    score = pd.DataFrame()
+    eventos = pd.DataFrame()
+    if has_score_tables(status):
+        score = query_df(
+            con, "SELECT * FROM scores_fornecedor WHERE cnpj = ? LIMIT 1", [cnpj]
+        )
+        eventos = query_df(
+            con,
+            """
+            SELECT sinal, forca, pontos, evidencia
+              FROM redflag_eventos
+             WHERE escopo = 'fornecedor' AND cnpj = ?
+             ORDER BY pontos DESC
+            """,
+            [cnpj],
+        )
+        if not eventos.empty:
+            from etl.score_redflags import RED_FLAGS
+
+            eventos["descricao"] = eventos["sinal"].map(
+                lambda s: str(RED_FLAGS.get(s, {}).get("descricao", s))
+            )
+
+    sancoes = query_df(
+        con,
+        """
+        SELECT tipo_sancao, orgao_sancionador, data_inicio, data_fim, fonte
+          FROM sancoes WHERE cnpj = ? ORDER BY data_inicio DESC NULLS LAST
+        """,
+        [cnpj],
+    )
+    contratos = query_df(
+        con,
+        """
+        SELECT orgao, municipio, modalidade, objeto, valor_contrato, data_contrato,
+               cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+          FROM contratos
+         WHERE cnpj_fornecedor = ?
+         ORDER BY valor_contrato DESC NULLS LAST
+         LIMIT 100
+        """,
+        [cnpj],
+    )
+    socios = query_df(
+        con,
+        """
+        SELECT nome_socio, doc_socio, qualificacao, data_entrada
+          FROM socios WHERE cnpj = ? ORDER BY data_entrada DESC NULLS LAST LIMIT 30
+        """,
+        [cnpj],
+    )
+    return {
+        "cnpj": cnpj,
+        "empresa": empresa,
+        "score": score,
+        "eventos": eventos,
+        "sancoes": sancoes,
+        "contratos": contratos,
+        "socios": socios,
+    }
+
+
+def municipios(con: duckdb.DuckDBPyConnection) -> list[str]:
+    """Lista de municípios disponíveis para a busca da página principal."""
+    return query_df(
+        con,
+        """
+        SELECT DISTINCT municipio
+          FROM contratos
+         WHERE municipio IS NOT NULL
+         ORDER BY municipio
+        """,
+    )["municipio"].tolist()
+
+
+def licitacoes_por_municipio(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+    municipio: str,
+    *,
+    ordem: str = "score",
+    limit: int | None = None,
+) -> pd.DataFrame:
+    """Licitações de um município, 1 linha por chave composta.
+
+    Agrupa a base de contratos pela chave da licitação e traz a razão social da
+    empresa vencedora (via `cnpj_vencedor`) e, quando disponível, o score da
+    licitação. Ordena por score por padrão, com alternativas seguras por data,
+    valor ou participantes. Sem `limit`, devolve TODAS as licitações da cidade.
+    """
+    # A busca municipal deve incluir processos sem vencedor. A view de
+    # homologados exclui esses casos, por isso esta consulta parte da tabela
+    # completa e agrega o score separadamente pela chave da licitação.
+    base_relation = "contratos"
+    order_by = ORDENS_LICITACAO.get(ordem, ORDENS_LICITACAO["score"])
+    if has_licitacao_scores(status):
+        score_columns = """
+               (sl.entidade_id IS NOT NULL) AS tem_score,
+               sl.score,
+               sl.score_bruto,
+               sl.qtd_sinais,
+               sl.sinais
+        """
+        score_join = """
+          LEFT JOIN scores_licitacao sl
+            ON sl.cd_orgao = l.cd_orgao
+           AND sl.nr_licitacao = l.nr_licitacao
+           AND sl.ano_licitacao = l.ano_licitacao
+           AND sl.cd_tipo_modalidade = l.cd_tipo_modalidade
+        """
+    else:
+        score_columns = """
+               FALSE AS tem_score,
+               NULL::INTEGER AS score,
+               NULL::INTEGER AS score_bruto,
+               0::INTEGER AS qtd_sinais,
+               NULL::VARCHAR AS sinais
+        """
+        score_join = ""
+    params: list[Any] = [municipio]
+    clausula_limit = ""
+    if limit is not None:
+        clausula_limit = "LIMIT ?"
+        params.append(limit)
+    return query_df(
+        con,
+        f"""
+        WITH licitacoes AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   ANY_VALUE(orgao)              AS orgao,
+                   ANY_VALUE(modalidade)         AS modalidade,
+                   ANY_VALUE(objeto)             AS objeto,
+                   MAX(valor_contrato)           AS valor_contrato,
+                   MAX(data_contrato)            AS data_contrato,
+                   MAX(qtd_participantes)        AS qtd_participantes,
+                   ANY_VALUE(cnpj_vencedor)      AS cnpj_vencedor,
+                   BOOL_OR(flag_covid)           AS flag_covid
+              FROM {base_relation}
+             WHERE municipio = ?
+               AND cd_orgao IS NOT NULL
+             GROUP BY cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+        )
+        SELECT l.*, e.razao_social AS razao_vencedor,
+               {score_columns}
+          FROM licitacoes l
+          LEFT JOIN empresas e ON e.cnpj = l.cnpj_vencedor
+          {score_join}
+         ORDER BY {order_by}
+         {clausula_limit}
+        """,
+        params,
+    )
+
+
+def contratos_da_licitacao(
+    con: duckdb.DuckDBPyConnection,
+    chave: dict[str, str],
+) -> pd.DataFrame:
+    """Todas as linhas de `contratos` (fornecedores participantes) de uma licitação."""
+    where, params = _chave_where(chave)
+    return query_df(
+        con,
+        f"""
+        SELECT cnpj_fornecedor, razao_social, modalidade,
+               valor_contrato, data_contrato, numero_contrato
+          FROM contratos
+         WHERE {where}
+         ORDER BY valor_contrato DESC NULLS LAST
+        """,
+        params,
+    )
+
+
+def _chave_where(chave: dict[str, str], *, alias: str = "") -> tuple[str, list[Any]]:
+    """Cláusula WHERE para a chave composta da licitação (com alias opcional)."""
+    prefixo = f"{alias}." if alias else ""
+    clauses = [f"{prefixo}{col} = ?" for col in CHAVE_LICITACAO]
+    params = [chave[col] for col in CHAVE_LICITACAO]
+    return " AND ".join(clauses), params
+
+
+def propostas_concorrentes(
+    con: duckdb.DuckDBPyConnection,
+    chave: dict[str, str],
+    cnpj_vencedor: str | None,
+) -> pd.DataFrame:
+    """Propostas das empresas que concorreram na licitação e NÃO venceram.
+
+    Lista ordenada do menor ao maior valor. Exclui o `cnpj_vencedor` (quando
+    conhecido) para sobrar só as perdedoras.
+    """
+    where, params = _chave_where(chave, alias="p")
+    if cnpj_vencedor:
+        where += " AND (p.cnpj_proposta IS NULL OR p.cnpj_proposta <> ?)"
+        params.append(cnpj_vencedor)
+    return query_df(
+        con,
+        f"""
+        SELECT p.cnpj_proposta,
+               e.razao_social,
+               p.resultado_proposta,
+               p.valor_total_proposta,
+               p.percentual_desconto,
+               p.data_proposta
+          FROM propostas p
+          LEFT JOIN empresas e ON e.cnpj = p.cnpj_proposta
+         WHERE {where}
+         ORDER BY p.valor_total_proposta ASC NULLS LAST
+        """,
+        params,
+    )
+
+
+def licitacao_detalhe(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+    chave: dict[str, str],
+) -> dict[str, Any]:
+    """Dados do dossiê de uma licitação: cabeçalho, vencedora, sanções, sinais e perdedoras."""
+    where, params = _chave_where(chave)
+    cabecalho = query_df(
+        con,
+        f"""
+        SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+               ANY_VALUE(orgao)         AS orgao,
+               ANY_VALUE(municipio)     AS municipio,
+               ANY_VALUE(modalidade)    AS modalidade,
+               ANY_VALUE(objeto)        AS objeto,
+               MAX(valor_contrato)      AS valor_contrato,
+               MAX(data_contrato)       AS data_contrato,
+               MAX(qtd_participantes)   AS qtd_participantes,
+               BOOL_OR(flag_covid)      AS flag_covid,
+               ANY_VALUE(cnpj_vencedor) AS cnpj_vencedor,
+               ANY_VALUE(numero_contrato) AS numero_contrato
+          FROM contratos
+         WHERE {where}
+         GROUP BY cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+        """,
+        params,
+    )
+
+    cnpj_vencedor = None
+    if not cabecalho.empty and pd.notna(cabecalho.iloc[0]["cnpj_vencedor"]):
+        cnpj_vencedor = str(cabecalho.iloc[0]["cnpj_vencedor"])
+
+    empresa = pd.DataFrame()
+    sancoes = pd.DataFrame()
+    if cnpj_vencedor:
+        empresa = query_df(con, "SELECT * FROM empresas WHERE cnpj = ? LIMIT 1", [cnpj_vencedor])
+        sancoes = query_df(
+            con,
+            """
+            SELECT tipo_sancao, orgao_sancionador, data_inicio, data_fim, fonte
+              FROM sancoes
+             WHERE cnpj = ?
+             ORDER BY data_inicio DESC NULLS LAST
+            """,
+            [cnpj_vencedor],
+        )
+
+    perdedoras = propostas_concorrentes(con, chave, cnpj_vencedor)
+    participantes = contratos_da_licitacao(con, chave)
+    sinais = _sinais_licitacao(con, status, chave, cabecalho, empresa, sancoes)
+
+    return {
+        "cabecalho": cabecalho,
+        "empresa": empresa,
+        "sancoes": sancoes,
+        "contratos": participantes,
+        "perdedoras": perdedoras,
+        "sinais": sinais,
+        "cnpj_vencedor": cnpj_vencedor,
+    }
+
+
+def _sinais_licitacao(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+    chave: dict[str, str],
+    cabecalho: pd.DataFrame,
+    empresa: pd.DataFrame,
+    sancoes: pd.DataFrame,
+) -> list[str]:
+    """Frases de indício (linguagem de hipótese) para a licitação selecionada."""
+    sinais: list[str] = []
+
+    def _existe(relation: str) -> bool:
+        if not relation_exists(status, relation):
+            return False
+        where, params = _chave_where(chave)
+        n = query_df(
+            con, f"SELECT COUNT(*) AS n FROM {relation} WHERE {where}", params
+        ).iloc[0]["n"]
+        return int(n) > 0
+
+    if _existe("vw_proposta_unica"):
+        sinais.append("Apenas uma proposta classificada após desclassificações (competição mínima).")
+    if relation_exists(status, "vw_cover_bidding_indicios"):
+        where, params = _chave_where(chave)
+        cover = query_df(
+            con,
+            f"SELECT MAX(razao_2a_vs_1a) AS razao FROM vw_cover_bidding_indicios WHERE {where}",
+            params,
+        )
+        razao = cover.iloc[0]["razao"] if not cover.empty else None
+        if razao is not None and pd.notna(razao):
+            sinais.append(
+                f"Segunda proposta {float(razao):.1f}x maior que a vencedora (padrão de cover bidding)."
+            )
+    if _existe("vw_alteracao_apos_abertura"):
+        sinais.append("Edital alterado/republicado após a publicação inicial.")
+    if relation_exists(status, "vw_sobrepreco_indicios"):
+        where, params = _chave_where(chave)
+        sobre = query_df(
+            con,
+            f"SELECT MAX(razao_vs_mediana) AS razao FROM vw_sobrepreco_indicios WHERE {where}",
+            params,
+        )
+        razao = sobre.iloc[0]["razao"] if not sobre.empty else None
+        if razao is not None and pd.notna(razao):
+            sinais.append(
+                f"Item com preço até {float(razao):.1f}x a mediana do grupo comparável."
+            )
+
+    if not cabecalho.empty:
+        qtd = cabecalho.iloc[0]["qtd_participantes"]
+        if qtd is not None and pd.notna(qtd) and qtd <= 2:
+            sinais.append("Baixa competição registrada (até dois participantes).")
+
+    if not sancoes.empty:
+        sinais.append("Empresa vencedora aparece em lista de sanções.")
+    if not empresa.empty:
+        emp = empresa.iloc[0]
+        if emp.get("situacao_cadastral") is not None and str(emp.get("situacao_cadastral")) != "2":
+            sinais.append("Situação cadastral da empresa vencedora não consta como ativa.")
+        cap = emp.get("capital_social")
+        valor = cabecalho.iloc[0]["valor_contrato"] if not cabecalho.empty else None
+        if (
+            cap is not None and pd.notna(cap) and float(cap) > 0
+            and valor is not None and pd.notna(valor)
+            and float(valor) / float(cap) > 10
+        ):
+            sinais.append("Valor do contrato é mais de 10x o capital social da vencedora.")
+
+    return sinais
 
 
 def filter_options(con: duckdb.DuckDBPyConnection) -> dict[str, list[str]]:

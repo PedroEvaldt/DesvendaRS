@@ -21,7 +21,7 @@ def test_create_mock_db(tmp_path, monkeypatch):
     finally:
         con.close()
 
-    assert contratos == 4
+    assert contratos == 6
     assert sancoes >= 1
     assert sobrepreco >= 1
     assert cover >= 1

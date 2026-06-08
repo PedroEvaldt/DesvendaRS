@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Dados temporariamente indisponíveis — DesvendaRS{% endblock %}
+
+{% block content %}
+<section class="error-shell">
+  <div class="shell error-card">
+    <span class="empty-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 3.5 18h17z"/><path d="M12 9v4M12 16.5h.01"/></svg>
+    </span>
+    <p class="eyebrow">Serviço indisponível</p>
+    <h1>Os dados ainda não estão prontos</h1>
+    {% if not existe %}
+      <p>O banco analítico <code>{{ caminho }}</code> ainda não foi gerado.</p>
+    {% else %}
+      <p>O banco existe, mas ainda faltam tabelas necessárias para apresentar as consultas.</p>
+    {% endif %}
+    <p>Para preparar o ambiente, execute:</p>
+    <div class="command">uv run python -m etl.build_db</div>
+  </div>
+</section>
+{% endblock %}

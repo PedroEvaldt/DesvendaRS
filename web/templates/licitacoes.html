@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Licitações por município — DesvendaRS{% endblock %}
+
+{% block content %}
+<section class="page-hero">
+  <div class="shell">
+    <p class="eyebrow">Compras públicas no mapa</p>
+    <h1>Explore licitações por município</h1>
+    <p>Escolha uma cidade para consultar vencedores, órgãos, valores, participantes e possíveis sinais em cada processo.</p>
+  </div>
+</section>
+
+<div class="shell page-search">
+  <form method="get" action="/licitacoes" class="search-panel search-panel--labeled search-form">
+    <div class="field-grow">
+      <label class="form-label" for="municipio">Município</label>
+      <select id="municipio" name="municipio" class="select-input" data-auto-submit>
+        <option value="">Selecione uma cidade</option>
+        {% for c in cidades %}
+        <option value="{{ c }}" {% if c == municipio %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="sort-field">
+      <label class="form-label" for="ordem">Ordenar por</label>
+      <select id="ordem" name="ordem" class="select-input" data-auto-submit>
+        <option value="score" {% if ordem == "score" %}selected{% endif %}>Maior score</option>
+        <option value="data" {% if ordem == "data" %}selected{% endif %}>Mais recentes</option>
+        <option value="valor" {% if ordem == "valor" %}selected{% endif %}>Maior valor</option>
+        <option value="participantes" {% if ordem == "participantes" %}selected{% endif %}>Mais participantes</option>
+      </select>
+    </div>
+    <button class="btn" type="submit">
+      Ver licitações
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+  </form>
+</div>
+
+<section class="page-section page-section--tight">
+  <div class="shell">
+    {% if municipio %}
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Resultado da consulta</p>
+          <h2>Licitações em {{ municipio }}</h2>
+          <p>
+            {% if ordem == "data" %}
+              Ordenadas das mais recentes para as mais antigas.
+            {% elif ordem == "valor" %}
+              Ordenadas do maior para o menor valor homologado.
+            {% elif ordem == "participantes" %}
+              Ordenadas pela maior quantidade de participantes.
+            {% else %}
+              Ordenadas do maior para o menor score de risco.
+            {% endif %}
+            Abra um processo para ver os detalhes.
+          </p>
+        </div>
+        <div class="result-count"><strong>{{ licitacoes|length }}</strong> processo{% if licitacoes|length != 1 %}s{% endif %}</div>
+      </div>
+
+      {% if not licitacoes %}
+        <div class="empty-state">
+          <span class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V9l8-5 8 5v12M8 21v-5h8v5"/></svg></span>
+          <h3>Nenhuma licitação encontrada</h3>
+          <p>Não há processos carregados para este município nas fontes atuais.</p>
+        </div>
+      {% else %}
+        <div class="table-card table-card--responsive">
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Licitação / vencedora</th>
+                  <th>Órgão / modalidade</th>
+                  <th class="align-right">Valor</th>
+                  <th class="align-right">Score</th>
+                  <th>Data</th>
+                  <th class="align-right">Participantes</th>
+                  <th>Objeto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for l in licitacoes %}
+                {% set detalhe_url = "/licitacoes/" ~ l.cd_orgao ~ "/" ~ l.nr_licitacao ~ "/" ~ l.ano_licitacao ~ "/" ~ l.cd_tipo_modalidade %}
+                <tr class="clickable-row" data-href="{{ detalhe_url }}">
+                  <td>
+                    <a class="entity-link" href="{{ detalhe_url }}">
+                      Licitação {{ l.nr_licitacao }}/{{ l.ano_licitacao }}
+                    </a>
+                    <span class="entity-subtitle entity-subtitle--text">
+                      {% if l.razao_vencedor %}
+                        Vencedora: {{ l.razao_vencedor }}
+                      {% else %}
+                        Vencedora não identificada
+                      {% endif %}
+                    </span>
+                  </td>
+                  <td data-label="Órgão">
+                    {{ l.orgao }}
+                    <span class="entity-subtitle">{{ l.modalidade or "Modalidade não informada" }}</span>
+                  </td>
+                  <td class="align-right nowrap" data-label="Valor">{{ l.valor_contrato | moeda }}</td>
+                  <td class="align-right nowrap" data-label="Score">
+                    {% if l.tem_score %}
+                      <span class="score-badge score-{{ l.score | nivel }}">{{ l.score }}</span>
+                      <span class="score-signals">
+                        {{ l.qtd_sinais }} {% if l.qtd_sinais == 1 %}sinal{% else %}sinais{% endif %}
+                      </span>
+                    {% else %}
+                      <span class="score-badge score-sem-score">—</span>
+                      <span class="score-signals">Sem score</span>
+                    {% endif %}
+                  </td>
+                  <td class="nowrap" data-label="Data">{{ l.data_contrato | data_br }}</td>
+                  <td class="align-right" data-label="Participantes">{{ l.qtd_participantes }}</td>
+                  <td class="cell-muted" data-label="Objeto">{{ (l.objeto or "Não informado")[:75] }}{% if l.objeto and l.objeto|length > 75 %}…{% endif %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="empty-state">
+        <span class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        </span>
+        <h2>Selecione um município</h2>
+        <p>Use o campo acima para começar. Você poderá comparar processos e abrir o dossiê completo de cada licitação.</p>
+      </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
