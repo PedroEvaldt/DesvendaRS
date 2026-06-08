@@ -57,17 +57,71 @@ RED_FLAGS: dict[str, dict[str, object]] = {
         "escopo": "fornecedor",
         "descricao": "Socio entrou ate 180 dias antes de contrato acima de R$ 100 mil.",
     },
+    "indicio_socio_comum_competidores": {
+        "pontos": 22,
+        "forca": "Forte",
+        "escopo": "fornecedor",
+        "descricao": "Empresas concorrentes na mesma licitacao compartilham socio mascarado.",
+    },
+    "indicio_endereco_compartilhado_competidores": {
+        "pontos": 12,
+        "forca": "Media",
+        "escopo": "fornecedor",
+        "descricao": "Empresas concorrentes na mesma licitacao compartilham endereco cadastral.",
+    },
+    "indicio_rotacao_vencedores": {
+        "pontos": 20,
+        "forca": "Forte",
+        "escopo": "fornecedor",
+        "descricao": "Par de competidores frequentes alterna vitorias entre licitacoes.",
+    },
+    "indicio_fornecedor_concentrado_por_orgao": {
+        "pontos": 12,
+        "forca": "Media",
+        "escopo": "fornecedor",
+        "descricao": "Fornecedor concentra valor relevante de contratos em um unico orgao.",
+    },
+    "indicio_fornecedor_exclusivo_orgao": {
+        "pontos": 10,
+        "forca": "Media",
+        "escopo": "fornecedor",
+        "descricao": "Fornecedor recebe praticamente todos os contratos de um unico orgao.",
+    },
     "alerta_competicao_zero": {
         "pontos": 22,
         "forca": "Forte",
         "escopo": "licitacao",
         "descricao": "Licitacao tem exatamente uma proposta classificada.",
     },
+    "alerta_baixa_competicao": {
+        "pontos": 6,
+        "forca": "Fraca/contextual",
+        "escopo": "licitacao",
+        "descricao": "Licitacao tem ate dois participantes ou propostas classificadas.",
+    },
     "alerta_cover_bidding": {
         "pontos": 15,
         "forca": "Media",
         "escopo": "licitacao",
         "descricao": "Segunda menor proposta e pelo menos 2 vezes a menor proposta.",
+    },
+    "alerta_dispensa_alto_valor": {
+        "pontos": 25,
+        "forca": "Forte",
+        "escopo": "licitacao",
+        "descricao": "Dispensa ou inexigibilidade com valor acima do limiar operacional.",
+    },
+    "indicio_fracionamento_dispensa": {
+        "pontos": 25,
+        "forca": "Forte",
+        "escopo": "licitacao",
+        "descricao": "Dispensas similares e repetidas somam valor alto em janela curta.",
+    },
+    "indicio_vencedor_recorrente_mesmo_objeto": {
+        "pontos": 15,
+        "forca": "Media",
+        "escopo": "licitacao",
+        "descricao": "Mesmo fornecedor vence repetidamente objeto parecido no mesmo orgao.",
     },
     "indicio_propostas_muito_proximas": {
         "pontos": 12,
@@ -87,11 +141,35 @@ RED_FLAGS: dict[str, dict[str, object]] = {
         "escopo": "licitacao",
         "descricao": "Mesmo par vencedor/segundo colocado se repete em 3 ou mais licitacoes.",
     },
+    "indicio_desconto_inexistente_em_ambiente_competitivo": {
+        "pontos": 8,
+        "forca": "Fraca/contextual",
+        "escopo": "licitacao",
+        "descricao": "Proposta vencedora quase nao oferece desconto apesar de competicao.",
+    },
     "alerta_alteracao_regra_tardia": {
         "pontos": 10,
         "forca": "Media",
         "escopo": "licitacao",
         "descricao": "Alteracao ou republicacao ocorre mais de 30 dias apos a primeira publicacao.",
+    },
+    "indicio_alteracao_edital_beneficia_vencedor": {
+        "pontos": 20,
+        "forca": "Forte",
+        "escopo": "licitacao",
+        "descricao": "Vencedor apresenta proposta apos alteracao ou republicacao do edital.",
+    },
+    "alerta_anulacao_historica": {
+        "pontos": 5,
+        "forca": "Fraca/contextual",
+        "escopo": "licitacao",
+        "descricao": "Orgao tem historico recorrente de anulacoes ou suspensoes.",
+    },
+    "indicio_prazo_curto_publicacao_abertura": {
+        "pontos": 15,
+        "forca": "Media",
+        "escopo": "licitacao",
+        "descricao": "Primeira proposta ocorre poucos dias apos publicacao do edital.",
     },
     "alerta_sobrepreco_alto": {
         "pontos": 18,
@@ -129,6 +207,107 @@ RED_FLAGS: dict[str, dict[str, object]] = {
         "escopo": "item",
         "descricao": "Proposta mais barata foi desclassificada e ha classificada mais cara.",
     },
+    "indicio_fonte_referencia_ausente_preco_alto": {
+        "pontos": 8,
+        "forca": "Fraca/contextual",
+        "escopo": "item",
+        "automatico": False,
+        "descricao": (
+            "Item com preco alto nao informa fonte de referencia; depende de "
+            "colunas ainda nao preservadas em itens."
+        ),
+    },
+    "alerta_orcamento_sigiloso_baixa_competicao": {
+        "pontos": 8,
+        "forca": "Fraca/contextual",
+        "escopo": "licitacao",
+        "automatico": False,
+        "descricao": (
+            "Orcamento sigiloso combinado com baixa competicao; depende de "
+            "coluna ainda nao preservada no banco analitico."
+        ),
+    },
+    "llm_justificativa_inexigibilidade_fraca": {
+        "pontos": 20,
+        "forca": "LLM/textual forte",
+        "escopo": "llm",
+        "automatico": False,
+        "descricao": "Avaliacao textual de justificativa fraca para dispensa/inexigibilidade.",
+    },
+    "llm_objeto_vago_ou_direcionado": {
+        "pontos": 12,
+        "forca": "LLM/textual media",
+        "escopo": "llm",
+        "automatico": False,
+        "descricao": "Avaliacao textual de objeto vago, generico ou direcionado.",
+    },
+    "llm_cnae_incompativel_objeto": {
+        "pontos": 15,
+        "forca": "LLM/textual media",
+        "escopo": "llm",
+        "automatico": False,
+        "descricao": "Avaliacao textual de compatibilidade entre CNAE, objeto e itens.",
+    },
+    "llm_fracionamento_semantico_objetos": {
+        "pontos": 20,
+        "forca": "LLM/textual forte",
+        "escopo": "llm",
+        "automatico": False,
+        "descricao": "Avaliacao semantica de objetos similares em processos distintos.",
+    },
+    "llm_alteracao_edital_direcionadora": {
+        "pontos": 18,
+        "forca": "LLM/textual forte",
+        "escopo": "llm",
+        "automatico": False,
+        "descricao": "Avaliacao textual de alteracao de edital potencialmente direcionadora.",
+    },
+    "llm_impugnacao_indica_restricao": {
+        "pontos": 15,
+        "forca": "LLM/textual media",
+        "escopo": "llm",
+        "automatico": False,
+        "descricao": "Avaliacao textual de impugnacoes ou esclarecimentos restritivos.",
+    },
+    "llm_item_generico_incomparavel": {
+        "pontos": 0,
+        "forca": "Controle de qualidade",
+        "escopo": "llm",
+        "automatico": False,
+        "descricao": "Controle textual para bloquear ou reduzir comparacoes ruins de sobrepreco.",
+    },
+    "llm_preco_plausivel_pelo_contexto": {
+        "pontos": 0,
+        "forca": "LLM/textual contextual",
+        "escopo": "llm",
+        "automatico": False,
+        "descricao": "Avaliacao contextual de plausibilidade de preco aparentemente alto.",
+    },
+    "llm_texto_copiado_entre_editais": {
+        "pontos": 8,
+        "forca": "LLM/textual contextual",
+        "escopo": "llm",
+        "automatico": False,
+        "descricao": "Avaliacao textual de alta semelhanca entre editais ou justificativas.",
+    },
+    "indicio_orgao_sobrepreco_recorrente": {
+        "pontos": 12,
+        "forca": "Media",
+        "escopo": "orgao",
+        "descricao": "Orgao aparece recorrentemente em itens com indicio de sobrepreco.",
+    },
+    "indicio_orgao_baixa_competicao_recorrente": {
+        "pontos": 10,
+        "forca": "Media",
+        "escopo": "orgao",
+        "descricao": "Orgao tem recorrencia de licitacoes com baixa competicao.",
+    },
+    "indicio_orgao_dispensas_recorrentes": {
+        "pontos": 12,
+        "forca": "Media",
+        "escopo": "orgao",
+        "descricao": "Orgao usa dispensa ou inexigibilidade de forma recorrente.",
+    },
 }
 
 
@@ -143,6 +322,7 @@ def criar_tabelas_score(
     _inserir_redflags_fornecedor(con)
     _inserir_redflags_licitacao(con)
     _inserir_redflags_item(con)
+    _inserir_redflags_orgao(con)
     _criar_scores_agregados(con, limiar_possivel_fraude)
 
 
@@ -341,6 +521,211 @@ def _inserir_redflags_fornecedor(con: duckdb.DuckDBPyConnection) -> None:
            AND c.data_contrato - s.data_entrada <= 180
         """,
     )
+    _insert(
+        con,
+        "indicio_socio_comum_competidores",
+        """
+        WITH competidores AS (
+            SELECT DISTINCT cd_orgao, nr_licitacao, ano_licitacao,
+                   cd_tipo_modalidade, cnpj_proposta
+              FROM propostas
+             WHERE cnpj_proposta IS NOT NULL
+        ),
+        pares AS (
+            SELECT c1.cd_orgao, c1.nr_licitacao, c1.ano_licitacao,
+                   c1.cd_tipo_modalidade,
+                   c1.cnpj_proposta AS cnpj_a,
+                   c2.cnpj_proposta AS cnpj_b,
+                   s1.doc_socio
+              FROM competidores c1
+              JOIN competidores c2
+                ON c1.cd_orgao = c2.cd_orgao
+               AND c1.nr_licitacao = c2.nr_licitacao
+               AND c1.ano_licitacao = c2.ano_licitacao
+               AND c1.cd_tipo_modalidade = c2.cd_tipo_modalidade
+               AND c1.cnpj_proposta < c2.cnpj_proposta
+              JOIN socios s1 ON s1.cnpj = c1.cnpj_proposta
+              JOIN socios s2 ON s2.cnpj = c2.cnpj_proposta
+                           AND s2.doc_socio = s1.doc_socio
+             WHERE s1.doc_socio IS NOT NULL
+        )
+        SELECT 'fornecedor' AS escopo,
+               cnpj AS entidade_id,
+               cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+               NULL AS nr_lote, NULL AS nr_item, cnpj,
+               'indicio_socio_comum_competidores' AS sinal,
+               'doc_socio=' || doc_socio ||
+               '; competidor=' || competidor AS evidencia
+          FROM (
+              SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                     cnpj_a AS cnpj, cnpj_b AS competidor, doc_socio
+                FROM pares
+              UNION ALL
+              SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                     cnpj_b AS cnpj, cnpj_a AS competidor, doc_socio
+                FROM pares
+          ) t
+        """,
+    )
+    _insert(
+        con,
+        "indicio_endereco_compartilhado_competidores",
+        """
+        WITH competidores AS (
+            SELECT DISTINCT cd_orgao, nr_licitacao, ano_licitacao,
+                   cd_tipo_modalidade, cnpj_proposta
+              FROM propostas
+             WHERE cnpj_proposta IS NOT NULL
+        ),
+        pares AS (
+            SELECT c1.cd_orgao, c1.nr_licitacao, c1.ano_licitacao,
+                   c1.cd_tipo_modalidade,
+                   c1.cnpj_proposta AS cnpj_a,
+                   c2.cnpj_proposta AS cnpj_b,
+                   e1.endereco
+              FROM competidores c1
+              JOIN competidores c2
+                ON c1.cd_orgao = c2.cd_orgao
+               AND c1.nr_licitacao = c2.nr_licitacao
+               AND c1.ano_licitacao = c2.ano_licitacao
+               AND c1.cd_tipo_modalidade = c2.cd_tipo_modalidade
+               AND c1.cnpj_proposta < c2.cnpj_proposta
+              JOIN empresas e1 ON e1.cnpj = c1.cnpj_proposta
+              JOIN empresas e2 ON e2.cnpj = c2.cnpj_proposta
+                            AND TRIM(UPPER(e2.endereco)) = TRIM(UPPER(e1.endereco))
+             WHERE e1.endereco IS NOT NULL
+               AND LENGTH(TRIM(e1.endereco)) >= 12
+        )
+        SELECT 'fornecedor' AS escopo,
+               cnpj AS entidade_id,
+               cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+               NULL AS nr_lote, NULL AS nr_item, cnpj,
+               'indicio_endereco_compartilhado_competidores' AS sinal,
+               'endereco=' || endereco ||
+               '; competidor=' || competidor AS evidencia
+          FROM (
+              SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                     cnpj_a AS cnpj, cnpj_b AS competidor, endereco
+                FROM pares
+              UNION ALL
+              SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                     cnpj_b AS cnpj, cnpj_a AS competidor, endereco
+                FROM pares
+          ) t
+        """,
+    )
+    _insert(
+        con,
+        "indicio_rotacao_vencedores",
+        """
+        WITH rankeadas AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   cnpj_proposta, valor_total_proposta,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+                       ORDER BY valor_total_proposta ASC
+                   ) AS posicao
+              FROM propostas
+             WHERE resultado_proposta = 'C'
+               AND cnpj_proposta IS NOT NULL
+               AND valor_total_proposta IS NOT NULL
+               AND valor_total_proposta > 0
+        ),
+        pares AS (
+            SELECT r1.cnpj_proposta AS cnpj_a,
+                   r2.cnpj_proposta AS cnpj_b,
+                   COUNT(*) AS licitacoes_juntas,
+                   SUM(CASE WHEN r1.posicao = 1 THEN 1 ELSE 0 END) AS vitorias_a,
+                   SUM(CASE WHEN r2.posicao = 1 THEN 1 ELSE 0 END) AS vitorias_b
+              FROM rankeadas r1
+              JOIN rankeadas r2
+                ON r1.cd_orgao = r2.cd_orgao
+               AND r1.nr_licitacao = r2.nr_licitacao
+               AND r1.ano_licitacao = r2.ano_licitacao
+               AND r1.cd_tipo_modalidade = r2.cd_tipo_modalidade
+               AND r1.cnpj_proposta < r2.cnpj_proposta
+             GROUP BY 1,2
+            HAVING COUNT(*) >= 5
+               AND SUM(CASE WHEN r1.posicao = 1 THEN 1 ELSE 0 END) >= 1
+               AND SUM(CASE WHEN r2.posicao = 1 THEN 1 ELSE 0 END) >= 1
+        )
+        SELECT DISTINCT 'fornecedor' AS escopo,
+               r.cnpj_proposta AS entidade_id,
+               r.cd_orgao, r.nr_licitacao, r.ano_licitacao, r.cd_tipo_modalidade,
+               NULL AS nr_lote, NULL AS nr_item, r.cnpj_proposta AS cnpj,
+               'indicio_rotacao_vencedores' AS sinal,
+               'par=' || p.cnpj_a || '/' || p.cnpj_b ||
+               '; licitacoes_juntas=' || CAST(p.licitacoes_juntas AS VARCHAR) ||
+               '; vitorias=' || CAST(p.vitorias_a AS VARCHAR) ||
+               '/' || CAST(p.vitorias_b AS VARCHAR) AS evidencia
+          FROM rankeadas r
+          JOIN pares p
+            ON r.cnpj_proposta IN (p.cnpj_a, p.cnpj_b)
+         WHERE r.posicao = 1
+        """,
+    )
+    _insert(
+        con,
+        "indicio_fornecedor_concentrado_por_orgao",
+        """
+        WITH totais AS (
+            SELECT cnpj_fornecedor, orgao,
+                   COUNT(*) AS qtd_contratos_orgao,
+                   SUM(valor_contrato) AS valor_orgao,
+                   SUM(SUM(valor_contrato)) OVER (PARTITION BY cnpj_fornecedor)
+                       AS valor_total
+              FROM contratos
+             WHERE cnpj_fornecedor IS NOT NULL
+               AND orgao IS NOT NULL
+               AND valor_contrato IS NOT NULL
+             GROUP BY 1,2
+        )
+        SELECT 'fornecedor' AS escopo,
+               cnpj_fornecedor AS entidade_id,
+               NULL AS cd_orgao, NULL AS nr_licitacao, NULL AS ano_licitacao,
+               NULL AS cd_tipo_modalidade, NULL AS nr_lote, NULL AS nr_item,
+               cnpj_fornecedor AS cnpj,
+               'indicio_fornecedor_concentrado_por_orgao' AS sinal,
+               'orgao=' || orgao ||
+               '; valor_orgao=' || CAST(valor_orgao AS VARCHAR) ||
+               '; valor_total=' || CAST(valor_total AS VARCHAR) AS evidencia
+          FROM totais
+         WHERE valor_total >= 100000
+           AND qtd_contratos_orgao >= 3
+           AND valor_orgao / valor_total >= 0.80
+        """,
+    )
+    _insert(
+        con,
+        "indicio_fornecedor_exclusivo_orgao",
+        """
+        WITH totais AS (
+            SELECT cnpj_fornecedor, orgao,
+                   COUNT(*) AS qtd_contratos_orgao,
+                   SUM(valor_contrato) AS valor_orgao,
+                   SUM(SUM(valor_contrato)) OVER (PARTITION BY cnpj_fornecedor)
+                       AS valor_total
+              FROM contratos
+             WHERE cnpj_fornecedor IS NOT NULL
+               AND orgao IS NOT NULL
+               AND valor_contrato IS NOT NULL
+             GROUP BY 1,2
+        )
+        SELECT 'fornecedor' AS escopo,
+               cnpj_fornecedor AS entidade_id,
+               NULL AS cd_orgao, NULL AS nr_licitacao, NULL AS ano_licitacao,
+               NULL AS cd_tipo_modalidade, NULL AS nr_lote, NULL AS nr_item,
+               cnpj_fornecedor AS cnpj,
+               'indicio_fornecedor_exclusivo_orgao' AS sinal,
+               'orgao=' || orgao ||
+               '; valor_orgao=' || CAST(valor_orgao AS VARCHAR) ||
+               '; valor_total=' || CAST(valor_total AS VARCHAR) AS evidencia
+         FROM totais
+         WHERE valor_total >= 50000
+           AND qtd_contratos_orgao >= 3
+           AND valor_orgao / valor_total >= 0.95
+        """,
+    )
 
 
 def _inserir_redflags_licitacao(con: duckdb.DuckDBPyConnection) -> None:
@@ -363,6 +748,26 @@ def _inserir_redflags_licitacao(con: duckdb.DuckDBPyConnection) -> None:
     )
     _insert(
         con,
+        "alerta_baixa_competicao",
+        f"""
+        WITH por_propostas AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   COUNT(DISTINCT cnpj_proposta) AS qtd_participantes
+              FROM propostas
+             WHERE cnpj_proposta IS NOT NULL
+             GROUP BY 1,2,3,4
+        )
+        SELECT 'licitacao' AS escopo, {lic_id} AS entidade_id,
+               cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+               NULL AS nr_lote, NULL AS nr_item, NULL AS cnpj,
+               'alerta_baixa_competicao' AS sinal,
+               'qtd_participantes=' || CAST(qtd_participantes AS VARCHAR) AS evidencia
+          FROM por_propostas
+         WHERE qtd_participantes BETWEEN 1 AND 2
+        """,
+    )
+    _insert(
+        con,
         "alerta_cover_bidding",
         f"""
         SELECT 'licitacao' AS escopo, {lic_id} AS entidade_id,
@@ -373,6 +778,104 @@ def _inserir_redflags_licitacao(con: duckdb.DuckDBPyConnection) -> None:
                '; segunda=' || cnpj_segunda ||
                '; razao=' || CAST(razao_2a_vs_1a AS VARCHAR) AS evidencia
           FROM vw_cover_bidding_indicios
+        """,
+    )
+    _insert(
+        con,
+        "alerta_dispensa_alto_valor",
+        """
+        SELECT 'licitacao' AS escopo,
+               orgao || '|' || modalidade || '|' ||
+               COALESCE(CAST(data_contrato AS VARCHAR), '?') || '|' ||
+               COALESCE(numero_contrato, '?') AS entidade_id,
+               NULL AS cd_orgao, NULL AS nr_licitacao, NULL AS ano_licitacao,
+               modalidade AS cd_tipo_modalidade, NULL AS nr_lote, NULL AS nr_item,
+               cnpj_fornecedor AS cnpj,
+               'alerta_dispensa_alto_valor' AS sinal,
+               'modalidade=' || COALESCE(modalidade, '?') ||
+               '; valor=' || CAST(valor_contrato AS VARCHAR) ||
+               '; orgao=' || COALESCE(orgao, '?') AS evidencia
+          FROM contratos
+         WHERE modalidade IN ('DSP', 'INX')
+           AND valor_contrato >= 100000
+        """,
+    )
+    _insert(
+        con,
+        "indicio_fracionamento_dispensa",
+        """
+        WITH grupos AS (
+            SELECT orgao, cnpj_fornecedor, objeto, modalidade,
+                   DATE_TRUNC('quarter', data_contrato) AS janela,
+                   COUNT(*) AS qtd_contratos,
+                   SUM(valor_contrato) AS valor_total
+              FROM contratos
+             WHERE modalidade IN ('DSP', 'INX')
+               AND orgao IS NOT NULL
+               AND cnpj_fornecedor IS NOT NULL
+               AND objeto IS NOT NULL
+               AND data_contrato IS NOT NULL
+               AND valor_contrato IS NOT NULL
+               AND valor_contrato < 100000
+             GROUP BY 1,2,3,4,5
+            HAVING COUNT(*) >= 2
+               AND SUM(valor_contrato) >= 100000
+        )
+        SELECT 'licitacao' AS escopo,
+               c.orgao || '|' || c.modalidade || '|' ||
+               COALESCE(CAST(c.data_contrato AS VARCHAR), '?') || '|' ||
+               COALESCE(c.numero_contrato, '?') AS entidade_id,
+               NULL AS cd_orgao, NULL AS nr_licitacao, NULL AS ano_licitacao,
+               c.modalidade AS cd_tipo_modalidade, NULL AS nr_lote, NULL AS nr_item,
+               c.cnpj_fornecedor AS cnpj,
+               'indicio_fracionamento_dispensa' AS sinal,
+               'grupo=' || COALESCE(c.objeto, '?') ||
+               '; janela=' || CAST(g.janela AS VARCHAR) ||
+               '; qtd=' || CAST(g.qtd_contratos AS VARCHAR) ||
+               '; soma=' || CAST(g.valor_total AS VARCHAR) AS evidencia
+          FROM contratos c
+          JOIN grupos g
+            ON c.orgao = g.orgao
+           AND c.cnpj_fornecedor = g.cnpj_fornecedor
+           AND c.objeto = g.objeto
+           AND c.modalidade = g.modalidade
+           AND DATE_TRUNC('quarter', c.data_contrato) = g.janela
+        """,
+    )
+    _insert(
+        con,
+        "indicio_vencedor_recorrente_mesmo_objeto",
+        """
+        WITH grupos AS (
+            SELECT orgao, cnpj_fornecedor, objeto,
+                   COUNT(*) AS qtd_contratos,
+                   SUM(valor_contrato) AS valor_total
+              FROM contratos
+             WHERE orgao IS NOT NULL
+               AND cnpj_fornecedor IS NOT NULL
+               AND objeto IS NOT NULL
+               AND valor_contrato IS NOT NULL
+             GROUP BY 1,2,3
+            HAVING COUNT(*) >= 3
+               AND SUM(valor_contrato) >= 100000
+        )
+        SELECT 'licitacao' AS escopo,
+               c.orgao || '|' || COALESCE(c.modalidade, '?') || '|' ||
+               COALESCE(CAST(c.data_contrato AS VARCHAR), '?') || '|' ||
+               COALESCE(c.numero_contrato, '?') AS entidade_id,
+               NULL AS cd_orgao, NULL AS nr_licitacao, NULL AS ano_licitacao,
+               c.modalidade AS cd_tipo_modalidade, NULL AS nr_lote, NULL AS nr_item,
+               c.cnpj_fornecedor AS cnpj,
+               'indicio_vencedor_recorrente_mesmo_objeto' AS sinal,
+               'orgao=' || c.orgao ||
+               '; objeto=' || c.objeto ||
+               '; qtd=' || CAST(g.qtd_contratos AS VARCHAR) ||
+               '; valor_total=' || CAST(g.valor_total AS VARCHAR) AS evidencia
+          FROM contratos c
+          JOIN grupos g
+            ON c.orgao = g.orgao
+           AND c.cnpj_fornecedor = g.cnpj_fornecedor
+           AND c.objeto = g.objeto
         """,
     )
     _insert(
@@ -496,6 +999,31 @@ def _inserir_redflags_licitacao(con: duckdb.DuckDBPyConnection) -> None:
     )
     _insert(
         con,
+        "indicio_desconto_inexistente_em_ambiente_competitivo",
+        f"""
+        WITH stats AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   COUNT(*) AS n_classificadas,
+                   MIN(percentual_desconto) AS menor_desconto
+              FROM propostas
+             WHERE resultado_proposta = 'C'
+               AND valor_total_proposta IS NOT NULL
+             GROUP BY 1,2,3,4
+        )
+        SELECT 'licitacao' AS escopo, {lic_id} AS entidade_id,
+               cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+               NULL AS nr_lote, NULL AS nr_item, NULL AS cnpj,
+               'indicio_desconto_inexistente_em_ambiente_competitivo' AS sinal,
+               'n_classificadas=' || CAST(n_classificadas AS VARCHAR) ||
+               '; menor_desconto=' || COALESCE(CAST(menor_desconto AS VARCHAR), '?')
+               AS evidencia
+          FROM stats
+         WHERE n_classificadas >= 3
+           AND COALESCE(menor_desconto, 0) <= 0
+        """,
+    )
+    _insert(
+        con,
         "alerta_alteracao_regra_tardia",
         f"""
         SELECT 'licitacao' AS escopo, {lic_id} AS entidade_id,
@@ -506,6 +1034,109 @@ def _inserir_redflags_licitacao(con: duckdb.DuckDBPyConnection) -> None:
                '; dias_apos_publicacao=' || CAST(dias_apos_publicacao AS VARCHAR) AS evidencia
           FROM vw_alteracao_apos_abertura
          WHERE dias_apos_publicacao > 30
+        """,
+    )
+    _insert(
+        con,
+        "indicio_alteracao_edital_beneficia_vencedor",
+        """
+        WITH alteracoes AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   MAX(data_evento) AS ultima_alteracao
+              FROM eventos_licitacao
+             WHERE cd_tipo_evento IN ('AED', 'REE')
+               AND data_evento IS NOT NULL
+             GROUP BY 1,2,3,4
+        ),
+        vencedoras AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   cnpj_proposta, data_proposta, valor_total_proposta,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+                       ORDER BY valor_total_proposta ASC
+                   ) AS posicao
+              FROM propostas
+             WHERE resultado_proposta = 'C'
+               AND valor_total_proposta IS NOT NULL
+               AND valor_total_proposta > 0
+        )
+        SELECT 'licitacao' AS escopo,
+               v.cd_orgao || '|' || v.nr_licitacao || '|' || v.ano_licitacao ||
+               '|' || v.cd_tipo_modalidade AS entidade_id,
+               v.cd_orgao, v.nr_licitacao, v.ano_licitacao, v.cd_tipo_modalidade,
+               NULL AS nr_lote, NULL AS nr_item, v.cnpj_proposta AS cnpj,
+               'indicio_alteracao_edital_beneficia_vencedor' AS sinal,
+               'ultima_alteracao=' || CAST(a.ultima_alteracao AS VARCHAR) ||
+               '; data_proposta=' || CAST(v.data_proposta AS VARCHAR) ||
+               '; vencedora=' || v.cnpj_proposta AS evidencia
+          FROM vencedoras v
+          JOIN alteracoes a USING (
+              cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+          )
+         WHERE v.posicao = 1
+           AND v.data_proposta IS NOT NULL
+           AND v.data_proposta >= a.ultima_alteracao
+        """,
+    )
+    _insert(
+        con,
+        "alerta_anulacao_historica",
+        """
+        WITH orgaos AS (
+            SELECT cd_orgao,
+                   COUNT(*) AS qtd_eventos
+              FROM eventos_licitacao
+             WHERE cd_tipo_evento IN ('ANO', 'SUO')
+             GROUP BY 1
+            HAVING COUNT(*) >= 5
+        )
+        SELECT DISTINCT 'licitacao' AS escopo,
+               e.cd_orgao || '|' || e.nr_licitacao || '|' || e.ano_licitacao ||
+               '|' || e.cd_tipo_modalidade AS entidade_id,
+               e.cd_orgao, e.nr_licitacao, e.ano_licitacao, e.cd_tipo_modalidade,
+               NULL AS nr_lote, NULL AS nr_item, NULL AS cnpj,
+               'alerta_anulacao_historica' AS sinal,
+               'cd_orgao=' || e.cd_orgao ||
+               '; anulacoes_suspensoes=' || CAST(o.qtd_eventos AS VARCHAR) AS evidencia
+          FROM eventos_licitacao e
+          JOIN orgaos o USING (cd_orgao)
+        """,
+    )
+    _insert(
+        con,
+        "indicio_prazo_curto_publicacao_abertura",
+        """
+        WITH publicacao AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   MIN(data_evento) AS data_publicacao
+              FROM eventos_licitacao
+             WHERE cd_tipo_evento IN ('PUE', 'PUB')
+               AND data_evento IS NOT NULL
+             GROUP BY 1,2,3,4
+        ),
+        primeira_proposta AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   MIN(data_proposta) AS data_primeira_proposta
+              FROM propostas
+             WHERE data_proposta IS NOT NULL
+             GROUP BY 1,2,3,4
+        )
+        SELECT 'licitacao' AS escopo,
+               p.cd_orgao || '|' || p.nr_licitacao || '|' || p.ano_licitacao ||
+               '|' || p.cd_tipo_modalidade AS entidade_id,
+               p.cd_orgao, p.nr_licitacao, p.ano_licitacao, p.cd_tipo_modalidade,
+               NULL AS nr_lote, NULL AS nr_item, NULL AS cnpj,
+               'indicio_prazo_curto_publicacao_abertura' AS sinal,
+               'publicacao=' || CAST(p.data_publicacao AS VARCHAR) ||
+               '; primeira_proposta=' || CAST(pp.data_primeira_proposta AS VARCHAR) ||
+               '; dias=' || CAST(pp.data_primeira_proposta - p.data_publicacao AS VARCHAR)
+               AS evidencia
+          FROM publicacao p
+          JOIN primeira_proposta pp USING (
+              cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+          )
+         WHERE pp.data_primeira_proposta >= p.data_publicacao
+           AND pp.data_primeira_proposta - p.data_publicacao <= 3
         """,
     )
 
@@ -677,6 +1308,101 @@ def _inserir_redflags_item(con: duckdb.DuckDBPyConnection) -> None:
     )
 
 
+def _inserir_redflags_orgao(con: duckdb.DuckDBPyConnection) -> None:
+    _insert(
+        con,
+        "indicio_orgao_sobrepreco_recorrente",
+        """
+        WITH orgaos AS (
+            SELECT cd_orgao,
+                   COUNT(*) AS qtd_indicios,
+                   AVG(razao_vs_mediana) AS razao_media,
+                   MAX(razao_vs_mediana) AS razao_pico
+              FROM vw_sobrepreco_indicios
+             WHERE cd_orgao IS NOT NULL
+             GROUP BY 1
+            HAVING COUNT(*) >= 10
+               AND AVG(razao_vs_mediana) >= 3
+        )
+        SELECT 'orgao' AS escopo,
+               cd_orgao AS entidade_id,
+               cd_orgao, NULL AS nr_licitacao, NULL AS ano_licitacao,
+               NULL AS cd_tipo_modalidade, NULL AS nr_lote, NULL AS nr_item,
+               NULL AS cnpj,
+               'indicio_orgao_sobrepreco_recorrente' AS sinal,
+               'qtd_indicios=' || CAST(qtd_indicios AS VARCHAR) ||
+               '; razao_media=' || CAST(razao_media AS VARCHAR) ||
+               '; razao_pico=' || CAST(razao_pico AS VARCHAR) AS evidencia
+          FROM orgaos
+        """,
+    )
+    _insert(
+        con,
+        "indicio_orgao_baixa_competicao_recorrente",
+        """
+        WITH licitacoes AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   COUNT(DISTINCT cnpj_proposta) AS qtd_participantes
+              FROM propostas
+             WHERE cd_orgao IS NOT NULL
+               AND cnpj_proposta IS NOT NULL
+             GROUP BY 1,2,3,4
+        ),
+        orgaos AS (
+            SELECT cd_orgao,
+                   COUNT(*) AS qtd_licitacoes,
+                   SUM(CASE WHEN qtd_participantes <= 2 THEN 1 ELSE 0 END)
+                       AS qtd_baixa_competicao
+              FROM licitacoes
+             GROUP BY 1
+            HAVING COUNT(*) >= 10
+               AND SUM(CASE WHEN qtd_participantes <= 2 THEN 1 ELSE 0 END)
+                   / COUNT(*) >= 0.50
+        )
+        SELECT 'orgao' AS escopo,
+               cd_orgao AS entidade_id,
+               cd_orgao, NULL AS nr_licitacao, NULL AS ano_licitacao,
+               NULL AS cd_tipo_modalidade, NULL AS nr_lote, NULL AS nr_item,
+               NULL AS cnpj,
+               'indicio_orgao_baixa_competicao_recorrente' AS sinal,
+               'qtd_baixa_competicao=' || CAST(qtd_baixa_competicao AS VARCHAR) ||
+               '; qtd_licitacoes=' || CAST(qtd_licitacoes AS VARCHAR) AS evidencia
+          FROM orgaos
+        """,
+    )
+    _insert(
+        con,
+        "indicio_orgao_dispensas_recorrentes",
+        """
+        WITH orgaos AS (
+            SELECT orgao,
+                   COUNT(*) AS qtd_contratos,
+                   SUM(CASE WHEN modalidade IN ('DSP', 'INX') THEN 1 ELSE 0 END)
+                       AS qtd_dispensas,
+                   SUM(CASE WHEN modalidade IN ('DSP', 'INX')
+                            THEN COALESCE(valor_contrato, 0) ELSE 0 END)
+                       AS valor_dispensas
+              FROM contratos
+             WHERE orgao IS NOT NULL
+             GROUP BY 1
+            HAVING COUNT(*) >= 10
+               AND SUM(CASE WHEN modalidade IN ('DSP', 'INX') THEN 1 ELSE 0 END)
+                   / COUNT(*) >= 0.50
+        )
+        SELECT 'orgao' AS escopo,
+               orgao AS entidade_id,
+               NULL AS cd_orgao, NULL AS nr_licitacao, NULL AS ano_licitacao,
+               NULL AS cd_tipo_modalidade, NULL AS nr_lote, NULL AS nr_item,
+               NULL AS cnpj,
+               'indicio_orgao_dispensas_recorrentes' AS sinal,
+               'qtd_dispensas=' || CAST(qtd_dispensas AS VARCHAR) ||
+               '; qtd_contratos=' || CAST(qtd_contratos AS VARCHAR) ||
+               '; valor_dispensas=' || CAST(valor_dispensas AS VARCHAR) AS evidencia
+          FROM orgaos
+        """,
+    )
+
+
 def _criar_scores_agregados(
     con: duckdb.DuckDBPyConnection,
     limiar_possivel_fraude: int,
@@ -685,6 +1411,7 @@ def _criar_scores_agregados(
         "scores_fornecedor",
         "scores_licitacao",
         "scores_item",
+        "scores_orgao",
         "vw_possivel_fraude",
     ):
         con.execute(f"DROP VIEW IF EXISTS {nome}")
@@ -737,6 +1464,20 @@ def _criar_scores_agregados(
         """
     )
     con.execute(
+        f"""
+        CREATE TABLE scores_orgao AS
+        SELECT entidade_id AS orgao_id,
+               SUM(pontos)::INTEGER AS score_bruto,
+               LEAST(SUM(pontos), 100)::INTEGER AS score,
+               SUM(pontos) >= {limiar_possivel_fraude} AS possivel_fraude,
+               COUNT(*)::INTEGER AS qtd_sinais,
+               STRING_AGG(DISTINCT sinal, ', ' ORDER BY sinal) AS sinais
+          FROM redflag_eventos
+         WHERE escopo = 'orgao'
+         GROUP BY entidade_id
+        """
+    )
+    con.execute(
         """
         CREATE VIEW vw_possivel_fraude AS
         SELECT 'fornecedor' AS escopo, cnpj AS entidade_id, score_bruto, score,
@@ -750,6 +1491,11 @@ def _criar_scores_agregados(
         UNION ALL
         SELECT 'item' AS escopo, entidade_id, score_bruto, score, qtd_sinais, sinais
           FROM scores_item
+         WHERE possivel_fraude
+        UNION ALL
+        SELECT 'orgao' AS escopo, orgao_id AS entidade_id, score_bruto, score,
+               qtd_sinais, sinais
+          FROM scores_orgao
          WHERE possivel_fraude
         """
     )
@@ -769,4 +1515,8 @@ def _criar_scores_agregados(
     con.execute(
         "CREATE INDEX IF NOT EXISTS idx_scores_item_score "
         "ON scores_item (score_bruto)"
+    )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_scores_orgao_score "
+        "ON scores_orgao (score_bruto)"
     )
