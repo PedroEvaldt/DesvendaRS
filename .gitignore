@@ -203,6 +203,9 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Windows alternate data stream sidecars created when files cross environments
+*:Zone.Identifier
+
 # Ruff stuff:
 .ruff_cache/
 

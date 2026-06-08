@@ -9,6 +9,7 @@ dependencies = [
     "pandas>=3.0.3",
     "polars>=1.41.2",
     "requests>=2.34.2",
+    "streamlit>=1.41.0",
 ]
 
 [dependency-groups]
