@@ -20,7 +20,7 @@ restante do time (painel, score de risco, busca por IA).
 Arquivos esperados em `data/raw/`:
 
 ```
-licitacao.csv, pessoas.csv, item.csv, licitante.csv     # LicitaCon/TCE-RS
+licitacao.csv, pessoas.csv, item.csv, licitante.csv, propost.csv, item_prop.csv, evento_lic.csv    # LicitaCon/TCE-RS
 Dados-Empresas-RS.csv, Socios-RS.csv                    # Receita/CNPJ via BD
 20260603_CEIS.csv, 20260603_CNEP.csv                    # Portal da Transparência
 SancoesCFIL-RS.csv                                      # PGE-RS
@@ -60,7 +60,7 @@ uv run python scripts/baixar_fontes.py --ano 2026 --listar
 Se quiser extrair apenas os CSVs de licitações que o ETL usa hoje, passe a lista desejada:
 
 ```bash
-uv run python scripts/baixar_fontes.py --ano 2026 --filtrar-licitacoes licitacao.csv licitante.csv item.csv pessoas.csv proposta.csv item_prop.csv evento_lic.csv
+uv run python scripts/baixar_fontes.py --ano 2026 --filtrar-licitacoes licitacao.csv licitante.csv item.csv pessoas.csv proposta.csv item_prop.csv evento_lic.csv lote.csv lote_prop.csv
 ```
 
 Se você preferir informar a URL manualmente (fallback opcional), use:
