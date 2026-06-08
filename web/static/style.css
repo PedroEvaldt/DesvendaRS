@@ -541,9 +541,25 @@ svg { display: block; }
   border-radius: .8rem;
 }
 .alert-item__icon { width: 34px; height: 34px; display: grid; place-items: center; color: var(--danger); background: var(--danger-soft); border-radius: .6rem; font-weight: 800; }
+.alert-item__head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .alert-item strong { font-size: .88rem; }
 .alert-item p { margin: .25rem 0 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .7rem; overflow-wrap: anywhere; }
 .alert-meta { display: inline-block; margin-left: .35rem; color: var(--muted); font-size: .7rem; font-weight: 600; }
+.occurrence-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.15rem;
+  height: 1.45rem;
+  padding: 0 .45rem;
+  color: var(--ink);
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 850;
+  line-height: 1;
+}
 .calm-state { display: flex; align-items: center; gap: .7rem; padding: .9rem; color: var(--success); background: var(--success-soft); border-radius: .75rem; font-size: .85rem; }
 .calm-state svg { width: 20px; flex: 0 0 auto; }
 

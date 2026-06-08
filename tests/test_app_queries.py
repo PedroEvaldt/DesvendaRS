@@ -243,6 +243,73 @@ def test_empresa_dossie_traz_sinais_com_descricao(mock_db):
     assert not dossie["sancoes"].empty
 
 
+def test_empresa_dossie_agrupa_redflags_repetidas(tmp_path):
+    con = duckdb.connect()
+    try:
+        con.execute("CREATE TABLE empresas (cnpj VARCHAR, razao_social VARCHAR)")
+        con.execute(
+            "CREATE TABLE scores_fornecedor (cnpj VARCHAR, score INTEGER, qtd_sinais INTEGER)"
+        )
+        con.execute(
+            "CREATE TABLE redflag_eventos (escopo VARCHAR, cnpj VARCHAR, sinal VARCHAR, forca VARCHAR, pontos INTEGER, evidencia VARCHAR)"
+        )
+        con.execute(
+            "CREATE TABLE sancoes (cnpj VARCHAR, tipo_sancao VARCHAR, orgao_sancionador VARCHAR, data_inicio DATE, data_fim DATE, fonte VARCHAR)"
+        )
+        con.execute(
+            "CREATE TABLE contratos (cnpj_fornecedor VARCHAR, orgao VARCHAR, municipio VARCHAR, modalidade VARCHAR, objeto VARCHAR, valor_contrato DOUBLE, data_contrato DATE, cd_orgao VARCHAR, nr_licitacao VARCHAR, ano_licitacao VARCHAR, cd_tipo_modalidade VARCHAR)"
+        )
+        con.execute(
+            "CREATE TABLE socios (cnpj VARCHAR, nome_socio VARCHAR, doc_socio VARCHAR, qualificacao VARCHAR, data_entrada DATE)"
+        )
+        con.execute("INSERT INTO empresas VALUES ('12345678000195', 'MEDSUL')")
+        con.execute("INSERT INTO scores_fornecedor VALUES ('12345678000195', 30, 2)")
+        con.executemany(
+            "INSERT INTO redflag_eventos VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "fornecedor",
+                    "12345678000195",
+                    "indicio_sancionado_ativo",
+                    "Forte",
+                    15,
+                    "contrato=1",
+                ),
+                (
+                    "fornecedor",
+                    "12345678000195",
+                    "indicio_sancionado_ativo",
+                    "Forte",
+                    15,
+                    "contrato=2",
+                ),
+            ],
+        )
+        status = DatabaseStatus(
+            path=tmp_path / "mock.duckdb",
+            exists=True,
+            tables={
+                "empresas",
+                "scores_fornecedor",
+                "redflag_eventos",
+                "sancoes",
+                "contratos",
+                "socios",
+            },
+            views=set(),
+        )
+
+        eventos = queries.empresa_dossie(con, status, "12345678000195")["eventos"]
+
+        assert len(eventos) == 1
+        linha = eventos.iloc[0]
+        assert linha["sinal"] == "indicio_sancionado_ativo"
+        assert linha["ocorrencias"] == 2
+        assert linha["pontos"] == 30
+    finally:
+        con.close()
+
+
 CHAVE_PELOTAS = {
     "cd_orgao": "003",
     "nr_licitacao": "300",
@@ -264,11 +331,85 @@ def test_alertas_licitacao_tem_severidade_descricao_evidencia(mock_db):
     con, status = mock_db
     df = queries.alertas_licitacao(con, status, CHAVE_PELOTAS)
     assert not df.empty
-    for coluna in ("descricao", "evidencia", "severidade", "forca"):
+    for coluna in ("descricao", "evidencia", "severidade", "forca", "ocorrencias"):
         assert coluna in df.columns
     assert set(df["severidade"]).issubset({"alto", "medio", "baixo"})
     # cover bidding é um dos alertas dessa licitação
     assert df["sinal"].str.contains("cover_bidding").any()
+
+
+def test_alertas_licitacao_agrupa_categoria_repetida(tmp_path):
+    con = duckdb.connect()
+    try:
+        con.execute(
+            """
+            CREATE TABLE redflag_eventos (
+                escopo VARCHAR,
+                cd_orgao VARCHAR,
+                nr_licitacao VARCHAR,
+                ano_licitacao VARCHAR,
+                cd_tipo_modalidade VARCHAR,
+                sinal VARCHAR,
+                forca VARCHAR,
+                pontos INTEGER,
+                evidencia VARCHAR
+            )
+            """
+        )
+        con.executemany(
+            "INSERT INTO redflag_eventos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "licitacao",
+                    "003",
+                    "300",
+                    "2026",
+                    "PRE",
+                    "alerta_cover_bidding",
+                    "Media",
+                    8,
+                    "proposta=1",
+                ),
+                (
+                    "licitacao",
+                    "003",
+                    "300",
+                    "2026",
+                    "PRE",
+                    "alerta_cover_bidding",
+                    "Media",
+                    8,
+                    "proposta=2",
+                ),
+                (
+                    "licitacao",
+                    "999",
+                    "999",
+                    "2026",
+                    "PRE",
+                    "alerta_cover_bidding",
+                    "Media",
+                    8,
+                    "fora_da_chave",
+                ),
+            ],
+        )
+        status = DatabaseStatus(
+            path=tmp_path / "mock.duckdb",
+            exists=True,
+            tables={"redflag_eventos"},
+            views=set(),
+        )
+
+        alertas = queries.alertas_licitacao(con, status, CHAVE_PELOTAS)
+
+        assert len(alertas) == 1
+        linha = alertas.iloc[0]
+        assert linha["sinal"] == "alerta_cover_bidding"
+        assert linha["ocorrencias"] == 2
+        assert linha["pontos"] == 16
+    finally:
+        con.close()
 
 
 def test_timeline_licitacao_ordenada_por_data(mock_db):

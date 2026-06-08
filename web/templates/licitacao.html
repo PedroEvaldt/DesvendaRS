@@ -12,9 +12,10 @@
   </div>
 </section>
 {% else %}
-{% set n_alto = alertas | selectattr('severidade', 'equalto', 'alto') | list | length %}
-{% set n_medio = alertas | selectattr('severidade', 'equalto', 'medio') | list | length %}
-{% set n_baixo = alertas | selectattr('severidade', 'equalto', 'baixo') | list | length %}
+{% set total_alertas = (alertas | sum(attribute='ocorrencias')) if alertas else (sinais|length) %}
+{% set n_alto = alertas | selectattr('severidade', 'equalto', 'alto') | sum(attribute='ocorrencias') %}
+{% set n_medio = alertas | selectattr('severidade', 'equalto', 'medio') | sum(attribute='ocorrencias') %}
+{% set n_baixo = alertas | selectattr('severidade', 'equalto', 'baixo') | sum(attribute='ocorrencias') %}
 <section class="page-hero">
   <div class="shell">
     <div class="breadcrumb">
@@ -60,7 +61,7 @@
       </article>
       <article class="metric-card">
         <div class="metric-top"><span class="metric-label">Indícios registrados</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 3.5 18h17z"/><path d="M12 9v4M12 16.5h.01"/></svg></span></div>
-        <strong class="metric-value">{{ alertas|length if alertas else (sinais|length) }}</strong>
+        <strong class="metric-value">{{ total_alertas }}</strong>
       </article>
     </div>
   </div>
@@ -137,6 +138,7 @@
               <div class="alert-card__head">
                 <span class="sev-badge sev-{{ a.severidade }}">{{ {'alto':'Alto','medio':'Médio','baixo':'Baixo'}[a.severidade] }}</span>
                 <strong>{{ a.descricao }}</strong>
+                {% if a.ocorrencias and a.ocorrencias > 1 %}<span class="occurrence-badge">x{{ a.ocorrencias }}</span>{% endif %}
               </div>
               {% if a.evidencia %}<p class="alert-card__evidence">{{ a.evidencia }}</p>{% endif %}
             </li>
