@@ -89,6 +89,80 @@
   </div>
 </section>
 
+{% if tem_panorama %}
+<section class="page-section">
+  <div class="shell">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Panorama de risco</p>
+        <h2>Onde os indícios se concentram</h2>
+        <p>Visão agregada das licitações com sinais detectados. Score alto indica prioridade de análise — nunca irregularidade comprovada.</p>
+      </div>
+    </div>
+
+    {% set maxn = (distribuicao | map(attribute='n') | max) or 1 %}
+    <div class="content-card">
+      <div class="content-card__head"><div><h2>Distribuição dos scores</h2><p>Quantidade de licitações sinalizadas por faixa de score de risco.</p></div></div>
+      <div class="chart-bars">
+        {% for d in distribuicao %}
+        {% set classe = 'alto' if d.faixa >= 70 else ('medio' if d.faixa >= 35 else 'baixo') %}
+        <div class="chart-bar">
+          <span class="chart-bar__count">{{ d.n }}</span>
+          <div class="chart-bar__track">
+            <div class="chart-bar__fill chart-bar__fill--{{ classe }}" style="height: {{ (d.n / maxn * 100) | round(1) }}%"></div>
+          </div>
+          <span class="chart-bar__label">{{ d.faixa }}{% if d.faixa == 90 %}–100{% else %}–{{ d.faixa + 9 }}{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="panorama-rankings">
+      <div class="content-card">
+        <div class="content-card__head"><div><h2>Órgãos mais monitorados</h2><p>Total de alertas em licitações por órgão público.</p></div></div>
+        {% if top_orgaos %}
+          {% set maxo = (top_orgaos | map(attribute='qtd_alertas') | max) or 1 %}
+          <ol class="rank-list">
+            {% for o in top_orgaos %}
+            <li class="rank-row">
+              <span class="rank-row__pos">{{ loop.index }}</span>
+              <span class="rank-row__name">{{ o.orgao }}</span>
+              <span class="rank-row__bar"><span class="rank-row__fill rank-row__fill--orgao" style="width: {{ (o.qtd_alertas / maxo * 100) | round(1) }}%"></span></span>
+              <span class="rank-row__value">{{ o.qtd_alertas }}</span>
+            </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="calm-state">Ainda sem alertas agregados por órgão.</div>
+        {% endif %}
+      </div>
+
+      <div class="content-card">
+        <div class="content-card__head"><div><h2>Municípios mais monitorados</h2><p>Distribuição geográfica dos alertas de risco.</p></div></div>
+        {% if top_municipios %}
+          {% set maxm = (top_municipios | map(attribute='qtd_alertas') | max) or 1 %}
+          <ol class="rank-list">
+            {% for m in top_municipios %}
+            <li class="rank-row">
+              <span class="rank-row__pos">{{ loop.index }}</span>
+              <span class="rank-row__name">
+                <svg class="rank-row__pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                {{ m.municipio }}
+              </span>
+              <span class="rank-row__bar"><span class="rank-row__fill rank-row__fill--municipio" style="width: {{ (m.qtd_alertas / maxm * 100) | round(1) }}%"></span></span>
+              <span class="rank-row__value">{{ m.qtd_alertas }}</span>
+            </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <div class="calm-state">Ainda sem alertas agregados por município.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+{% endif %}
+
 <section class="page-section page-section--white">
   <div class="shell">
     <div class="section-heading">
@@ -144,6 +218,30 @@
         </div>
       </div>
     {% endif %}
+  </div>
+</section>
+
+<section class="methodology">
+  <div class="shell">
+    <div class="methodology__card">
+      <span class="method-tag">Metodologia</span>
+      <h2>Como o score de risco é calculado?</h2>
+      <p>O score do DesvendaRS soma indícios objetivos detectados em cada processo — competição, padrões de preço, histórico de empresas e alterações de regra. Quanto maior, mais sinais se acumulam e mais o caso <strong>merece análise humana</strong>. O score nunca afirma irregularidade.</p>
+      <div class="method-cards">
+        <article class="method-card">
+          <div class="method-card__top"><span class="sev-badge sev-baixo">1–34</span><strong>Baixo</strong></div>
+          <p>Poucos ou nenhum indício. Características compatíveis com boa governança e competição adequada.</p>
+        </article>
+        <article class="method-card">
+          <div class="method-card__top"><span class="sev-badge sev-medio">35–69</span><strong>Médio</strong></div>
+          <p>Presença de sinais que merecem acompanhamento e verificação adicional.</p>
+        </article>
+        <article class="method-card">
+          <div class="method-card__top"><span class="sev-badge sev-alto">70–100</span><strong>Alto</strong></div>
+          <p>Múltiplos indícios reunidos. Merece análise humana prioritária.</p>
+        </article>
+      </div>
+    </div>
   </div>
 </section>
 {% endblock %}

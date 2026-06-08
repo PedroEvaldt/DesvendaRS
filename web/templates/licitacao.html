@@ -12,6 +12,9 @@
   </div>
 </section>
 {% else %}
+{% set n_alto = alertas | selectattr('severidade', 'equalto', 'alto') | list | length %}
+{% set n_medio = alertas | selectattr('severidade', 'equalto', 'medio') | list | length %}
+{% set n_baixo = alertas | selectattr('severidade', 'equalto', 'baixo') | list | length %}
 <section class="page-hero">
   <div class="shell">
     <div class="breadcrumb">
@@ -32,11 +35,15 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
         {{ cabecalho.municipio }}
       </span>
+      <span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+        {{ cabecalho.data_contrato | data_br }}
+      </span>
     </div>
   </div>
 </section>
 
-<section class="page-section">
+<section class="page-section page-section--tight">
   <div class="shell">
     <div class="metrics-grid">
       <article class="metric-card">
@@ -48,126 +55,196 @@
         <strong class="metric-value">{{ cabecalho.modalidade or "—" }}</strong>
       </article>
       <article class="metric-card">
-        <div class="metric-top"><span class="metric-label">Data</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span></div>
-        <strong class="metric-value">{{ cabecalho.data_contrato | data_br }}</strong>
+        <div class="metric-top"><span class="metric-label">Participantes</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M3.5 20c.2-4 2.2-6 5.5-6s5.3 2 5.5 6M15 15c3.3-.3 5.1 1.4 5.5 4"/></svg></span></div>
+        <strong class="metric-value">{{ cabecalho.qtd_participantes if cabecalho.qtd_participantes is not none else "—" }}</strong>
       </article>
       <article class="metric-card">
-        <div class="metric-top"><span class="metric-label">Participantes</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M3.5 20c.2-4 2.2-6 5.5-6s5.3 2 5.5 6M15 15c3.3-.3 5.1 1.4 5.5 4"/></svg></span></div>
-        <strong class="metric-value">{{ cabecalho.qtd_participantes or "—" }}</strong>
+        <div class="metric-top"><span class="metric-label">Indícios registrados</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 3.5 18h17z"/><path d="M12 9v4M12 16.5h.01"/></svg></span></div>
+        <strong class="metric-value">{{ alertas|length if alertas else (sinais|length) }}</strong>
       </article>
     </div>
   </div>
 </section>
 
 <section class="page-section page-section--white">
-  <div class="shell detail-main">
-    <section class="content-card">
-      <div class="content-card__head">
-        <div><h2>Sinais para revisão</h2><p>Red flags identificadas automaticamente neste processo.</p></div>
-        {% if sinais %}<span class="section-count">{{ sinais|length }}</span>{% endif %}
-      </div>
-      {% if not sinais %}
-        <div class="calm-state">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>
-          Nenhum sinal automático forte foi identificado para esta licitação.
+  <div class="shell detail-layout">
+    <div class="detail-main">
+      <section class="content-card">
+        <div class="content-card__head">
+          <div><h2>Alertas para revisão</h2><p>Indícios identificados automaticamente. Cada um pode ter explicação legítima — servem para orientar a análise humana.</p></div>
+          {% if alertas %}
+          <div class="sev-summary">
+            {% if n_alto %}<span class="sev-badge sev-alto">{{ n_alto }} alto{{ "s" if n_alto != 1 }}</span>{% endif %}
+            {% if n_medio %}<span class="sev-badge sev-medio">{{ n_medio }} médio{{ "s" if n_medio != 1 }}</span>{% endif %}
+            {% if n_baixo %}<span class="sev-badge sev-baixo">{{ n_baixo }} baixo{{ "s" if n_baixo != 1 }}</span>{% endif %}
+          </div>
+          {% endif %}
         </div>
-      {% else %}
-        <ul class="alert-list">
-          {% for s in sinais %}
-          <li class="alert-item"><span class="alert-item__icon">!</span><div><strong>{{ s }}</strong></div></li>
+        {% if alertas %}
+          <ul class="alert-cards">
+            {% for a in alertas %}
+            <li class="alert-card alert-card--{{ a.severidade }}">
+              <div class="alert-card__head">
+                <span class="sev-badge sev-{{ a.severidade }}">{{ {'alto':'Alto','medio':'Médio','baixo':'Baixo'}[a.severidade] }}</span>
+                <strong>{{ a.descricao }}</strong>
+              </div>
+              {% if a.evidencia %}<p class="alert-card__evidence">{{ a.evidencia }}</p>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        {% elif sinais %}
+          <ul class="alert-cards">
+            {% for s in sinais %}
+            <li class="alert-card alert-card--medio">
+              <div class="alert-card__head"><span class="sev-badge sev-medio">Indício</span><strong>{{ s }}</strong></div>
+            </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="calm-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>
+            Nenhum sinal automático forte foi identificado para esta licitação.
+          </div>
+        {% endif %}
+      </section>
+
+      {% if timeline %}
+      <section class="content-card">
+        <div class="content-card__head"><div><h2>Linha do tempo</h2><p>Marcos do processo conforme as datas registradas nas fontes.</p></div></div>
+        <ol class="timeline">
+          {% for etapa in timeline %}
+          <li class="timeline__item">
+            <span class="timeline__dot"></span>
+            <div class="timeline__body">
+              <strong>{{ etapa.etapa }}</strong>
+              <p>{{ etapa.descricao }}</p>
+              <time>{{ etapa.data | data_br }}</time>
+            </div>
+          </li>
           {% endfor %}
-        </ul>
+        </ol>
+      </section>
       {% endif %}
-    </section>
 
-    <section class="content-card">
-      <div class="content-card__head"><div><h2>Empresa vencedora</h2><p>Fornecedor homologado no processo.</p></div></div>
-      {% if not empresa %}
-        <p class="cell-muted">Vencedora não identificada como pessoa jurídica nesta licitação.</p>
-      {% else %}
-        <div class="company-feature">
-          <div>
-            <div class="company-feature__name"><a href="/empresas/{{ cnpj_vencedor }}">{{ empresa.razao_social }}</a></div>
-            <div class="company-feature__meta">{{ cnpj_vencedor | cnpj }}</div>
+      <section class="content-card">
+        <div class="content-card__head"><div><h2>Empresa vencedora</h2><p>Fornecedor homologado no processo.</p></div></div>
+        {% if not empresa %}
+          <p class="cell-muted">Vencedora não identificada como pessoa jurídica nesta licitação.</p>
+        {% else %}
+          <div class="company-feature">
+            <div>
+              <div class="company-feature__name"><a href="/empresas/{{ cnpj_vencedor }}">{{ empresa.razao_social }}</a></div>
+              <div class="company-feature__meta">{{ cnpj_vencedor | cnpj }}</div>
+            </div>
+            <div class="company-feature__facts">
+              <span>Capital social<strong>{{ empresa.capital_social | moeda }}</strong></span>
+              <span>Situação<strong>{{ empresa.situacao_cadastral | situacao_cadastral }}</strong></span>
+            </div>
           </div>
-          <div class="company-feature__facts">
-            <span>Capital social<strong>{{ empresa.capital_social | moeda }}</strong></span>
-            <span>Situação<strong>{{ empresa.situacao_cadastral | situacao_cadastral }}</strong></span>
-          </div>
-        </div>
-      {% endif %}
-    </section>
+        {% endif %}
+      </section>
 
-    <section class="content-card">
-      <div class="content-card__head">
-        <div><h2>Todos os participantes</h2><p>Fornecedores vinculados ao processo nas fontes carregadas.</p></div>
-        <span class="section-count">{{ participantes|length }}</span>
-      </div>
-      <div class="table-card table-card--responsive">
-        <div class="table-scroll">
-          <table class="data-table">
-            <thead><tr><th>Fornecedor</th><th class="align-right">Valor</th><th>Data</th></tr></thead>
-            <tbody>
-              {% for p in participantes %}
-              <tr>
-                <td>
-                  {% if p.cnpj_fornecedor %}
-                    <a class="entity-link" href="/empresas/{{ p.cnpj_fornecedor }}">{{ p.razao_social or "(sem nome)" }}</a>
-                    <span class="entity-subtitle">{{ p.cnpj_fornecedor | cnpj }}</span>
-                  {% else %}
-                    <strong>Fornecedor não identificado</strong>
-                    <span class="entity-subtitle entity-subtitle--text">CNPJ não informado na fonte</span>
-                  {% endif %}
-                </td>
-                <td class="align-right nowrap" data-label="Valor">{{ p.valor_contrato | moeda }}</td>
-                <td class="nowrap" data-label="Data">{{ p.data_contrato | data_br }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+      <section class="content-card">
+        <div class="content-card__head">
+          <div><h2>Todos os participantes</h2><p>Fornecedores vinculados ao processo nas fontes carregadas.</p></div>
+          <span class="section-count">{{ participantes|length }}</span>
         </div>
-      </div>
-    </section>
-
-    <section class="content-card">
-      <div class="content-card__head">
-        <div><h2>Propostas concorrentes</h2><p>Empresas que apresentaram proposta e não venceram, da mais barata à mais cara.</p></div>
-        {% if perdedoras %}<span class="section-count">{{ perdedoras|length }}</span>{% endif %}
-      </div>
-      {% if not perdedoras %}
-        <div class="calm-state">Nenhuma proposta concorrente registrada nas fontes carregadas.</div>
-      {% else %}
         <div class="table-card table-card--responsive">
           <div class="table-scroll">
             <table class="data-table">
-              <thead><tr><th>Empresa</th><th>Resultado</th><th class="align-right">Valor proposto</th></tr></thead>
+              <thead><tr><th>Fornecedor</th><th class="align-right">Valor</th><th>Data</th></tr></thead>
               <tbody>
-                {% for p in perdedoras %}
+                {% for p in participantes %}
                 <tr>
                   <td>
-                    {% if p.cnpj_proposta %}
-                      <a class="entity-link" href="/empresas/{{ p.cnpj_proposta }}">{{ p.razao_social or "(sem nome)" }}</a>
-                      <span class="entity-subtitle">{{ p.cnpj_proposta | cnpj }}</span>
+                    {% if p.cnpj_fornecedor %}
+                      <a class="entity-link" href="/empresas/{{ p.cnpj_fornecedor }}">{{ p.razao_social or "(sem nome)" }}</a>
+                      <span class="entity-subtitle">{{ p.cnpj_fornecedor | cnpj }}</span>
                     {% else %}
-                      <strong>Empresa não identificada</strong>
+                      <strong>Fornecedor não identificado</strong>
                       <span class="entity-subtitle entity-subtitle--text">CNPJ não informado na fonte</span>
                     {% endif %}
                   </td>
-                  <td data-label="Resultado"><span class="status-badge score-sem-score">{{ p.resultado_proposta }}</span></td>
-                  <td class="align-right nowrap" data-label="Valor">{{ p.valor_total_proposta | moeda }}</td>
+                  <td class="align-right nowrap" data-label="Valor">{{ p.valor_contrato | moeda }}</td>
+                  <td class="nowrap" data-label="Data">{{ p.data_contrato | data_br }}</td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         </div>
-      {% endif %}
-    </section>
+      </section>
 
-    <a href="/licitacoes?municipio={{ cabecalho.municipio }}" class="btn btn--ghost">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
-      Voltar às licitações de {{ cabecalho.municipio }}
-    </a>
+      <section class="content-card">
+        <div class="content-card__head">
+          <div><h2>Propostas concorrentes</h2><p>Empresas que apresentaram proposta e não venceram, da mais barata à mais cara.</p></div>
+          {% if perdedoras %}<span class="section-count">{{ perdedoras|length }}</span>{% endif %}
+        </div>
+        {% if not perdedoras %}
+          <div class="calm-state">Nenhuma proposta concorrente registrada nas fontes carregadas.</div>
+        {% else %}
+          <div class="table-card table-card--responsive">
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead><tr><th>Empresa</th><th>Resultado</th><th class="align-right">Valor proposto</th></tr></thead>
+                <tbody>
+                  {% for p in perdedoras %}
+                  <tr>
+                    <td>
+                      {% if p.cnpj_proposta %}
+                        <a class="entity-link" href="/empresas/{{ p.cnpj_proposta }}">{{ p.razao_social or "(sem nome)" }}</a>
+                        <span class="entity-subtitle">{{ p.cnpj_proposta | cnpj }}</span>
+                      {% else %}
+                        <strong>Empresa não identificada</strong>
+                        <span class="entity-subtitle entity-subtitle--text">CNPJ não informado na fonte</span>
+                      {% endif %}
+                    </td>
+                    <td data-label="Resultado"><span class="status-badge score-sem-score">{{ p.resultado_proposta }}</span></td>
+                    <td class="align-right nowrap" data-label="Valor">{{ p.valor_total_proposta | moeda }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endif %}
+      </section>
+
+      <a href="/licitacoes?municipio={{ cabecalho.municipio }}" class="btn btn--ghost">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+        Voltar às licitações de {{ cabecalho.municipio }}
+      </a>
+    </div>
+
+    <aside class="detail-aside">
+      {% if score %}
+      {% set faixa = score.score | nivel %}
+      <section class="content-card score-card">
+        <div class="content-card__head"><div><h2>Score de risco</h2><p>Soma ponderada dos indícios. Não é prova de irregularidade.</p></div></div>
+        <div class="gauge gauge--{{ faixa }}">
+          <svg viewBox="0 0 200 116" aria-hidden="true">
+            <path class="gauge__track" d="M16 108 A84 84 0 0 1 184 108"/>
+            <path class="gauge__value" d="M16 108 A84 84 0 0 1 184 108"
+                  style="stroke-dasharray: {{ (score.score / 100 * 263.9) | round(1) }} 263.9"/>
+          </svg>
+          <div class="gauge__readout">
+            <strong>{{ score.score }}</strong><span>/100</span>
+          </div>
+        </div>
+        <p class="gauge__caption gauge__caption--{{ faixa }}">
+          {% if faixa == 'alto' %}Merece análise humana prioritária
+          {% elif faixa == 'medio' %}Merece acompanhamento
+          {% elif faixa == 'baixo' %}Poucos indícios reunidos
+          {% else %}Sem indícios fortes{% endif %}
+        </p>
+        <div class="sev-tally">
+          <div class="sev-tally__item"><strong class="sev-alto-text">{{ n_alto }}</strong><span>Alto</span></div>
+          <div class="sev-tally__item"><strong class="sev-medio-text">{{ n_medio }}</strong><span>Médio</span></div>
+          <div class="sev-tally__item"><strong class="sev-baixo-text">{{ n_baixo }}</strong><span>Baixo</span></div>
+        </div>
+      </section>
+      {% endif %}
+    </aside>
   </div>
 </section>
 {% endif %}

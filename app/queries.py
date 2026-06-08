@@ -59,6 +59,108 @@ def overview(con: duckdb.DuckDBPyConnection, status: DatabaseStatus) -> dict[str
     return metrics
 
 
+def distribuicao_scores(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+) -> pd.DataFrame:
+    """Distribuição das licitações sinalizadas por faixa de score (0–9 … 90–100).
+
+    Sempre devolve as 10 faixas (com zero onde não há licitações), para o gráfico
+    de barras do panorama. Tudo zero quando o pipeline de score ainda não rodou.
+    """
+    faixas = pd.DataFrame({"faixa": list(range(0, 100, 10))})
+    if not has_licitacao_scores(status):
+        faixas["n"] = 0
+        return faixas
+    dados = query_df(
+        con,
+        """
+        SELECT FLOOR(LEAST(score, 99) / 10)::INTEGER * 10 AS faixa, COUNT(*) AS n
+          FROM scores_licitacao
+         GROUP BY 1
+        """,
+    )
+    resultado = faixas.merge(dados, on="faixa", how="left")
+    resultado["n"] = resultado["n"].fillna(0).astype(int)
+    return resultado
+
+
+def orgaos_mais_alertas(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+    *,
+    limit: int = 7,
+) -> pd.DataFrame:
+    """Órgãos com mais alertas em licitações (ranking do panorama).
+
+    Conta os sinais (`qtd_sinais`) das licitações de cada `cd_orgao`; o nome legível
+    vem de `contratos`. Vazio quando faltam tabelas de score.
+    """
+    if not has_licitacao_scores(status):
+        return pd.DataFrame()
+    return query_df(
+        con,
+        """
+        WITH nomes AS (
+            SELECT cd_orgao, ANY_VALUE(orgao) AS orgao
+              FROM contratos
+             WHERE cd_orgao IS NOT NULL
+             GROUP BY cd_orgao
+        )
+        SELECT s.cd_orgao,
+               COALESCE(n.orgao, 'Órgão ' || s.cd_orgao, 'Órgão não identificado') AS orgao,
+               COUNT(*) AS qtd_licitacoes,
+               SUM(s.qtd_sinais)::INTEGER AS qtd_alertas
+          FROM scores_licitacao s
+          LEFT JOIN nomes n ON n.cd_orgao = s.cd_orgao
+         GROUP BY s.cd_orgao, n.orgao
+         ORDER BY qtd_alertas DESC, qtd_licitacoes DESC
+         LIMIT ?
+        """,
+        [limit],
+    )
+
+
+def municipios_mais_alertas(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+    *,
+    limit: int = 6,
+) -> pd.DataFrame:
+    """Municípios com mais alertas em licitações (ranking do panorama).
+
+    Liga a chave de `scores_licitacao` ao município de `contratos` e soma os sinais.
+    Vazio quando faltam tabelas de score.
+    """
+    if not has_licitacao_scores(status):
+        return pd.DataFrame()
+    return query_df(
+        con,
+        """
+        WITH municipio_licitacao AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   ANY_VALUE(municipio) AS municipio
+              FROM contratos
+             WHERE municipio IS NOT NULL
+             GROUP BY cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade
+        )
+        SELECT m.municipio,
+               COUNT(*) AS qtd_licitacoes,
+               SUM(s.qtd_sinais)::INTEGER AS qtd_alertas
+          FROM scores_licitacao s
+          JOIN municipio_licitacao m
+            ON m.cd_orgao = s.cd_orgao
+           AND m.nr_licitacao = s.nr_licitacao
+           AND m.ano_licitacao = s.ano_licitacao
+           AND m.cd_tipo_modalidade = s.cd_tipo_modalidade
+         GROUP BY m.municipio
+         ORDER BY qtd_alertas DESC, qtd_licitacoes DESC
+         LIMIT ?
+        """,
+        [limit],
+    )
+
+
 CHAVE_LICITACAO = ["cd_orgao", "nr_licitacao", "ano_licitacao", "cd_tipo_modalidade"]
 ORDENS_LICITACAO = {
     "score": "score DESC NULLS LAST, l.valor_contrato DESC NULLS LAST",
@@ -396,6 +498,9 @@ def licitacao_detalhe(
     perdedoras = propostas_concorrentes(con, chave, cnpj_vencedor)
     participantes = contratos_da_licitacao(con, chave)
     sinais = _sinais_licitacao(con, status, chave, cabecalho, empresa, sancoes)
+    alertas = alertas_licitacao(con, status, chave)
+    score = score_licitacao(con, status, chave)
+    timeline = timeline_licitacao(con, status, chave)
 
     return {
         "cabecalho": cabecalho,
@@ -404,8 +509,153 @@ def licitacao_detalhe(
         "contratos": participantes,
         "perdedoras": perdedoras,
         "sinais": sinais,
+        "alertas": alertas,
+        "score": score,
+        "timeline": timeline,
         "cnpj_vencedor": cnpj_vencedor,
     }
+
+
+def score_licitacao(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+    chave: dict[str, str],
+) -> pd.DataFrame:
+    """Score agregado da licitação (de `scores_licitacao`), pela chave composta.
+
+    Devolve DataFrame vazio se o pipeline de score ainda não rodou — o dossiê
+    degrada mostrando apenas os sinais textuais.
+    """
+    if not has_licitacao_scores(status):
+        return pd.DataFrame()
+    where, params = _chave_where(chave)
+    return query_df(
+        con,
+        f"""
+        SELECT score, score_bruto, qtd_sinais, possivel_fraude
+          FROM scores_licitacao
+         WHERE {where}
+         LIMIT 1
+        """,
+        params,
+    )
+
+
+def _severidade(forca: Any) -> str:
+    """Traduz a `forca` do sinal para o nível de severidade exibido (alto/médio/baixo)."""
+    texto = str(forca or "").lower()
+    if "forte" in texto:
+        return "alto"
+    if "media" in texto or "média" in texto:
+        return "medio"
+    return "baixo"
+
+
+def alertas_licitacao(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+    chave: dict[str, str],
+) -> pd.DataFrame:
+    """Alertas da licitação com descrição, evidência e severidade, de `redflag_eventos`.
+
+    Lê os eventos atômicos de escopo 'licitacao' pela chave composta, traz a
+    descrição humana via `RED_FLAGS` e deriva a severidade a partir da força do
+    sinal. Cada linha é um indício rastreável (evidência preservada). Vazio quando
+    as tabelas de score não existem — o template cai para os sinais textuais.
+    """
+    if not relation_exists(status, "redflag_eventos"):
+        return pd.DataFrame()
+    where, params = _chave_where(chave)
+    eventos = query_df(
+        con,
+        f"""
+        SELECT sinal, forca, pontos, evidencia
+          FROM redflag_eventos
+         WHERE escopo = 'licitacao' AND {where}
+         ORDER BY pontos DESC, sinal
+        """,
+        params,
+    )
+    if eventos.empty:
+        return eventos
+    from etl.score_redflags import RED_FLAGS
+
+    eventos["descricao"] = eventos["sinal"].map(
+        lambda s: str(RED_FLAGS.get(s, {}).get("descricao", s))
+    )
+    eventos["severidade"] = eventos["forca"].map(_severidade)
+    return eventos
+
+
+def timeline_licitacao(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+    chave: dict[str, str],
+) -> list[dict[str, Any]]:
+    """Linha do tempo da licitação montada só com as datas realmente presentes.
+
+    Cruza `eventos_licitacao`, `propostas` e `contratos` pela chave composta e
+    devolve as etapas (publicação → recebimento → homologação → contratação) que
+    têm data registrada. Não inventa etapas: o que não tiver data fica de fora.
+    """
+    where, params = _chave_where(chave)
+    etapas: list[dict[str, Any]] = []
+
+    def _data(sql: str) -> Any:
+        df = query_df(con, sql, params)
+        if df.empty:
+            return None
+        valor = df.iloc[0, 0]
+        return valor if pd.notna(valor) else None
+
+    if relation_exists(status, "eventos_licitacao"):
+        publicacao = _data(
+            f"""
+            SELECT MIN(data_evento) FROM eventos_licitacao
+             WHERE {where} AND cd_tipo_evento IN ('PUE', 'PUB')
+            """
+        )
+        if publicacao is not None:
+            etapas.append(
+                {
+                    "etapa": "Publicação do edital",
+                    "descricao": "Primeira publicação registrada do processo.",
+                    "data": publicacao,
+                }
+            )
+
+    if relation_exists(status, "propostas"):
+        recebimento = _data(f"SELECT MAX(data_proposta) FROM propostas WHERE {where}")
+        if recebimento is not None:
+            etapas.append(
+                {
+                    "etapa": "Recebimento das propostas",
+                    "descricao": "Última proposta registrada das empresas participantes.",
+                    "data": recebimento,
+                }
+            )
+        homologacao = _data(f"SELECT MAX(data_homologacao) FROM propostas WHERE {where}")
+        if homologacao is not None:
+            etapas.append(
+                {
+                    "etapa": "Homologação",
+                    "descricao": "Homologação do resultado do processo.",
+                    "data": homologacao,
+                }
+            )
+
+    contratacao = _data(f"SELECT MAX(data_contrato) FROM contratos WHERE {where}")
+    if contratacao is not None:
+        etapas.append(
+            {
+                "etapa": "Contratação",
+                "descricao": "Assinatura do contrato com a empresa vencedora.",
+                "data": contratacao,
+            }
+        )
+
+    etapas.sort(key=lambda e: pd.Timestamp(e["data"]))
+    return etapas
 
 
 def _sinais_licitacao(

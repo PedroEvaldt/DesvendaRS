@@ -92,5 +92,28 @@ def test_dossie_licitacao_mostra_vencedora_e_perdedoras(client):
     assert "EPSILON SISTEMAS" in r.text         # perdedora
 
 
+def test_home_mostra_panorama_e_metodologia(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "Panorama de risco" in r.text
+    assert "Distribuição dos scores" in r.text
+    assert "Órgãos mais monitorados" in r.text
+    assert "Municípios mais monitorados" in r.text
+    assert "Como o score de risco é calculado?" in r.text
+
+
+def test_dossie_licitacao_mostra_gauge_alertas_e_timeline(client):
+    r = client.get("/licitacoes/003/300/2026/PRE")
+    assert r.status_code == 200
+    assert "Score de risco" in r.text          # gauge
+    assert "/100" in r.text
+    assert "Alertas para revisão" in r.text     # painel de severidade
+    assert "Linha do tempo" in r.text           # timeline
+    assert "Publicação do edital" in r.text
+    # postura de indício preservada (linguagem de hipótese, não de acusação)
+    assert "análise humana" in r.text.lower()
+    assert "explicação legítima" in r.text.lower()
+
+
 def test_healthz(client):
     assert client.get("/healthz").text == "ok"
