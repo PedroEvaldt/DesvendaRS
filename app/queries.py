@@ -408,6 +408,119 @@ def licitacao_detalhe(
     }
 
 
+def licitacao_ai_context(
+    con: duckdb.DuckDBPyConnection,
+    status: DatabaseStatus,
+    chave: dict[str, str],
+    detalhe: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Contexto compacto para o overview textual da IA."""
+    detalhe = detalhe or licitacao_detalhe(con, status, chave)
+    where, params = _chave_where(chave)
+
+    itens = pd.DataFrame()
+    if relation_exists(status, "itens"):
+        itens = query_df(
+            con,
+            f"""
+            SELECT descricao, unidade, quantidade, valor_unitario_estimado,
+                   valor_unitario_homologado, valor_total_homologado, flag_covid
+              FROM itens
+             WHERE {where}
+             ORDER BY valor_total_homologado DESC NULLS LAST
+             LIMIT 20
+            """,
+            params,
+        )
+
+    propostas = pd.DataFrame()
+    if relation_exists(status, "propostas"):
+        where_propostas, params_propostas = _chave_where(chave, alias="p")
+        propostas = query_df(
+            con,
+            f"""
+            SELECT p.cnpj_proposta, e.razao_social, p.resultado_proposta,
+                   p.valor_total_proposta, p.percentual_desconto, p.data_proposta
+              FROM propostas p
+              LEFT JOIN empresas e ON e.cnpj = p.cnpj_proposta
+             WHERE {where_propostas}
+             ORDER BY p.valor_total_proposta ASC NULLS LAST
+             LIMIT 30
+            """,
+            params_propostas,
+        )
+
+    eventos = pd.DataFrame()
+    if relation_exists(status, "eventos_licitacao"):
+        eventos = query_df(
+            con,
+            f"""
+            SELECT cd_tipo_fase, cd_tipo_evento, data_evento,
+                   descricao_publicacao, tipo_resultado
+              FROM eventos_licitacao
+             WHERE {where}
+             ORDER BY data_evento ASC NULLS LAST
+             LIMIT 25
+            """,
+            params,
+        )
+
+    sobrepreco = pd.DataFrame()
+    if relation_exists(status, "vw_sobrepreco_indicios"):
+        sobrepreco = query_df(
+            con,
+            f"""
+            SELECT descricao, unidade, valor_unitario_homologado, mediana,
+                   n_obs, razao_vs_mediana
+              FROM vw_sobrepreco_indicios
+             WHERE {where}
+             ORDER BY razao_vs_mediana DESC
+             LIMIT 10
+            """,
+            params,
+        )
+
+    score = pd.DataFrame()
+    if has_licitacao_scores(status):
+        score = query_df(
+            con,
+            f"""
+            SELECT score, score_bruto, qtd_sinais, sinais
+              FROM scores_licitacao
+             WHERE {where}
+             LIMIT 1
+            """,
+            params,
+        )
+
+    return {
+        "chave": chave,
+        "cabecalho": _df_records(detalhe["cabecalho"], limit=1),
+        "empresa_vencedora": _df_records(detalhe["empresa"], limit=1),
+        "sancoes_vencedora": _df_records(detalhe["sancoes"], limit=10),
+        "participantes_contratos": _df_records(detalhe["contratos"], limit=30),
+        "propostas": _df_records(propostas, limit=30),
+        "propostas_perdedoras": _df_records(detalhe["perdedoras"], limit=30),
+        "itens": _df_records(itens, limit=20),
+        "indicios_sobrepreco": _df_records(sobrepreco, limit=10),
+        "eventos": _df_records(eventos, limit=25),
+        "score_licitacao": _df_records(score, limit=1),
+        "sinais_automaticos": detalhe["sinais"],
+        "observacao_uso": (
+            "Dados públicos carregados no DuckDB; sinais são indícios para revisão humana, "
+            "não conclusões de fraude."
+        ),
+    }
+
+
+def _df_records(df: pd.DataFrame, *, limit: int) -> list[dict[str, Any]]:
+    if df is None or df.empty:
+        return []
+    head = df.head(limit)
+    clean = head.where(pd.notna(head), None)
+    return clean.to_dict(orient="records")
+
+
 def _sinais_licitacao(
     con: duckdb.DuckDBPyConnection,
     status: DatabaseStatus,

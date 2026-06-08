@@ -61,6 +61,56 @@
 
 <section class="page-section page-section--white">
   <div class="shell detail-main">
+    <section class="content-card ai-card">
+      <div class="content-card__head">
+        <div>
+          <h2>{{ ai_overview.title }}</h2>
+          <p>Avaliação textual gerada a partir dos dados carregados deste processo.</p>
+        </div>
+        <span class="section-count">IA</span>
+      </div>
+      {% if ai_overview.status == "missing_key" %}
+        <div class="notice">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 17h.01"/></svg>
+          <p>{{ ai_overview.summary }} Use <code>GEMINI_API_KEY</code> ou <code>GOOGLE_API_KEY</code>.</p>
+        </div>
+      {% elif ai_overview.status == "error" %}
+        <div class="notice">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 17h.01"/></svg>
+          <p>{{ ai_overview.summary }}</p>
+        </div>
+      {% else %}
+        <p class="ai-summary">{{ ai_overview.summary }}</p>
+        <div class="ai-grid">
+          <div>
+            <h3>Pontos de atenção</h3>
+            {% if ai_overview.bullets %}
+              <ul class="ai-list">
+                {% for item in ai_overview.bullets %}
+                <li>{{ item }}</li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="cell-muted">A IA não destacou pontos adicionais além dos sinais automáticos.</p>
+            {% endif %}
+          </div>
+          <div>
+            <h3>Limitações</h3>
+            {% if ai_overview.limitations %}
+              <ul class="ai-list ai-list--muted">
+                {% for item in ai_overview.limitations %}
+                <li>{{ item }}</li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="cell-muted">Nenhuma limitação adicional foi destacada pelo modelo.</p>
+            {% endif %}
+          </div>
+        </div>
+        <p class="ai-disclaimer">A IA não conclui irregularidade; ela organiza indícios para revisão humana.</p>
+      {% endif %}
+    </section>
+
     <section class="content-card">
       <div class="content-card__head">
         <div><h2>Sinais para revisão</h2><p>Red flags identificadas automaticamente neste processo.</p></div>

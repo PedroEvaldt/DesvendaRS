@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import config
+from app.ai_overview import generate_licitacao_overview
 from app import queries
 from app.db import DatabaseStatus, connect, inspect_database
 
@@ -246,6 +247,12 @@ def licitacao(
         if con is None:
             return _fallback(request, status)
         detalhe = queries.licitacao_detalhe(con, status, chave)
+        ai_context = queries.licitacao_ai_context(con, status, chave, detalhe)
+        ai_overview = generate_licitacao_overview(
+            ai_context,
+            timeout=6.0,
+            api_key="" if os.environ.get("PYTEST_CURRENT_TEST") else None,
+        )
         return templates.TemplateResponse(
             request,
             "licitacao.html",
@@ -258,5 +265,6 @@ def licitacao(
                 "participantes": _registros(detalhe["contratos"]),
                 "perdedoras": _registros(detalhe["perdedoras"]),
                 "cnpj_vencedor": detalhe["cnpj_vencedor"],
+                "ai_overview": ai_overview,
             },
         )

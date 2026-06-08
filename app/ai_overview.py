@@ -9,6 +9,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -36,7 +37,11 @@ def api_key_from_env() -> str | None:
 
     Supports both names because teams commonly use either one locally.
     """
-    return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    return (
+        os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+        or _key_from_dotenv()
+    )
 
 
 def generate_licitacao_overview(
@@ -47,7 +52,7 @@ def generate_licitacao_overview(
     timeout: float = 18.0,
 ) -> AIOverview:
     """Ask Gemini for a concise, structured overview of one licitation."""
-    key = api_key or api_key_from_env()
+    key = api_key if api_key is not None else api_key_from_env()
     if not key:
         return AIOverview(
             enabled=False,
@@ -159,6 +164,25 @@ def _extract_text(payload: dict[str, Any]) -> str:
     candidates = payload["candidates"]
     parts = candidates[0]["content"]["parts"]
     return "\n".join(str(part.get("text", "")) for part in parts).strip()
+
+
+def _key_from_dotenv() -> str | None:
+    """Read a local ignored .env file without adding a dependency."""
+    path = Path(__file__).resolve().parents[1] / ".env"
+    if not path.exists():
+        return None
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        clean = line.strip()
+        if not clean or clean.startswith("#") or "=" not in clean:
+            continue
+        name, value = clean.split("=", 1)
+        if name.strip() in {"GEMINI_API_KEY", "GOOGLE_API_KEY"}:
+            return value.strip().strip("\"'")
+    return None
 
 
 def _parse_json_object(text: str) -> dict[str, Any] | None:

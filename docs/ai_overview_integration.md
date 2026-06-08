@@ -1,10 +1,12 @@
 # Integração do Overview de IA
 
-Este arquivo descreve como plugar o módulo novo `app/ai_overview.py` no front quando a branch visual estiver pronta.
+Este arquivo descreve como operar e manter o overview de IA já integrado ao
+dossiê de licitação (`/licitacoes/{chave}`).
 
 ## Configuração
 
-Não coloque a chave no código. O módulo lê:
+Não coloque a chave no código. O módulo lê variáveis de ambiente e também o
+arquivo local ignorado `.env`:
 
 ```bash
 export GEMINI_API_KEY="..."
@@ -18,7 +20,8 @@ export GEMINI_MODEL="gemini-1.5-flash"
 
 ## Uso básico
 
-Monte um dicionário com os dados da licitação e chame:
+A rota do front usa `queries.licitacao_ai_context(...)` para montar o contexto e
+chama:
 
 ```python
 from app.ai_overview import generate_licitacao_overview
@@ -37,7 +40,7 @@ O retorno tem:
 
 ## Contexto recomendado
 
-Enviar apenas dados úteis e compactos:
+O contexto enviado deve continuar compacto:
 
 - cabeçalho da licitação: órgão, município, modalidade, objeto, valor, data, participantes;
 - empresa vencedora: razão social, CNPJ, CNAE, capital social, situação cadastral, data de abertura;

@@ -547,6 +547,43 @@ svg { display: block; }
 .calm-state { display: flex; align-items: center; gap: .7rem; padding: .9rem; color: var(--success); background: var(--success-soft); border-radius: .75rem; font-size: .85rem; }
 .calm-state svg { width: 20px; flex: 0 0 auto; }
 
+.ai-card {
+  border-color: #b7ded6;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fcfb 100%);
+}
+.ai-summary {
+  margin: 0;
+  color: var(--ink);
+  font-size: .95rem;
+}
+.ai-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr);
+  gap: 1.2rem;
+  margin-top: 1.2rem;
+}
+.ai-grid h3 {
+  margin: 0 0 .55rem;
+  color: var(--ink-soft);
+  font-size: .74rem;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.ai-list {
+  display: grid;
+  gap: .55rem;
+  margin: 0;
+  padding-left: 1.05rem;
+  color: var(--ink);
+  font-size: .86rem;
+}
+.ai-list--muted { color: var(--muted); }
+.ai-disclaimer {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: .76rem;
+}
+
 .facts { display: grid; gap: 0; margin: 0; }
 .fact { padding: .75rem 0; border-bottom: 1px solid var(--line-soft); }
 .fact:first-child { padding-top: 0; }
