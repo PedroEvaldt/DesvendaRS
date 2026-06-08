@@ -244,10 +244,15 @@ def empresa_dossie(
         eventos = query_df(
             con,
             """
-            SELECT sinal, forca, pontos, evidencia
+            SELECT sinal,
+                   MAX(forca) AS forca,
+                   SUM(pontos)::INTEGER AS pontos,
+                   COUNT(*)::INTEGER AS ocorrencias,
+                   MIN(evidencia) AS evidencia
               FROM redflag_eventos
              WHERE escopo = 'fornecedor' AND cnpj = ?
-             ORDER BY pontos DESC
+             GROUP BY sinal
+             ORDER BY pontos DESC, sinal
             """,
             [cnpj],
         )
@@ -569,9 +574,14 @@ def alertas_licitacao(
     eventos = query_df(
         con,
         f"""
-        SELECT sinal, forca, pontos, evidencia
+        SELECT sinal,
+               MAX(forca) AS forca,
+               SUM(pontos)::INTEGER AS pontos,
+               COUNT(*)::INTEGER AS ocorrencias,
+               MIN(evidencia) AS evidencia
           FROM redflag_eventos
          WHERE escopo = 'licitacao' AND {where}
+         GROUP BY sinal
          ORDER BY pontos DESC, sinal
         """,
         params,

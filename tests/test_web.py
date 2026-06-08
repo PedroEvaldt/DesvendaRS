@@ -115,5 +115,13 @@ def test_dossie_licitacao_mostra_gauge_alertas_e_timeline(client):
     assert "explicação legítima" in r.text.lower()
 
 
+def test_dossie_licitacao_soma_ocorrencias_agrupadas(client):
+    r = client.get("/licitacoes/001/100/2026/PRE")
+    assert r.status_code == 200
+    assert "x2" in r.text
+    assert 'class="metric-value">6</strong>' in r.text
+    assert "4 médios" in r.text
+
+
 def test_healthz(client):
     assert client.get("/healthz").text == "ok"

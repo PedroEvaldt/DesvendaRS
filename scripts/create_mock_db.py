@@ -97,6 +97,26 @@ def _contratos() -> pd.DataFrame:
                 "cnpj_vencedor": "12345678000195",
             },
             {
+                # Segundo contrato da mesma empresa para testar no front o
+                # agrupamento de red flags repetidas com badge "xN".
+                "cnpj_fornecedor": "12345678000195",
+                "razao_social": "MEDSUL SUPRIMENTOS HOSPITALARES LTDA",
+                "orgao": "PM DE PORTO ALEGRE",
+                "municipio": "PORTO ALEGRE",
+                "modalidade": "DSP",
+                "objeto": "Fornecimento complementar de insumos hospitalares",
+                "valor_contrato": 180000.00,
+                "data_contrato": date(2026, 4, 8),
+                "numero_contrato": "2026-002",
+                "qtd_participantes": 1,
+                "flag_covid": True,
+                "cd_orgao": "001",
+                "nr_licitacao": "101",
+                "ano_licitacao": "2026",
+                "cd_tipo_modalidade": "DSP",
+                "cnpj_vencedor": "12345678000195",
+            },
+            {
                 "cnpj_fornecedor": "22345678000195",
                 "razao_social": "ALFA OBRAS E SERVICOS LTDA",
                 "orgao": "PM DE CANOAS",
@@ -427,8 +447,14 @@ def _propostas_itens() -> pd.DataFrame:
 def _eventos() -> pd.DataFrame:
     return pd.DataFrame(
         [
+            _evento("001", "100", "2026", "PRE", "1", "PUB", date(2026, 1, 8)),
+            # Dois eventos tardios na mesma licitação de Porto Alegre para
+            # testar no front o agrupamento de alertas repetidos com badge "xN".
+            _evento("001", "100", "2026", "PRE", "2", "AED", date(2026, 2, 18)),
+            _evento("001", "100", "2026", "PRE", "3", "REE", date(2026, 2, 25)),
             _evento("003", "300", "2026", "PRE", "1", "PUB", date(2026, 1, 5)),
             _evento("003", "300", "2026", "PRE", "2", "AED", date(2026, 2, 20)),
+            _evento("003", "300", "2026", "PRE", "3", "REE", date(2026, 3, 3)),
             _evento("004", "400", "2026", "PRE", "1", "PUB", date(2026, 3, 1)),
             _evento("004", "400", "2026", "PRE", "2", "REE", date(2026, 3, 20)),
         ]

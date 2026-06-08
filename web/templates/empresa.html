@@ -53,7 +53,7 @@
             <h2>Red flags</h2>
             <p>Indícios automáticos encontrados e a evidência usada no cálculo.</p>
           </div>
-          {% if eventos %}<span class="section-count">{{ eventos|length }}</span>{% endif %}
+          {% if eventos %}<span class="section-count">{{ eventos | sum(attribute='ocorrencias') }}</span>{% endif %}
         </div>
         {% if not eventos %}
           <div class="calm-state">
@@ -66,7 +66,10 @@
             <li class="alert-item">
               <span class="alert-item__icon">!</span>
               <div>
-                <strong>{{ ev.descricao }}</strong>
+                <div class="alert-item__head">
+                  <strong>{{ ev.descricao }}</strong>
+                  {% if ev.ocorrencias and ev.ocorrencias > 1 %}<span class="occurrence-badge">x{{ ev.ocorrencias }}</span>{% endif %}
+                </div>
                 <span class="alert-meta">{{ ev.forca }} · +{{ ev.pontos }} pontos</span>
                 <p>{{ ev.evidencia }}</p>
               </div>
