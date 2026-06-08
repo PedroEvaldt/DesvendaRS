@@ -21,7 +21,12 @@ def _criar_schema_minimo(con: duckdb.DuckDBPyConnection) -> None:
             data_contrato DATE,
             numero_contrato VARCHAR,
             qtd_participantes INTEGER,
-            flag_covid BOOLEAN
+            flag_covid BOOLEAN,
+            cd_orgao VARCHAR,
+            nr_licitacao VARCHAR,
+            ano_licitacao VARCHAR,
+            cd_tipo_modalidade VARCHAR,
+            cnpj_vencedor VARCHAR
         )
         """
     )
@@ -215,7 +220,7 @@ def test_red_flags_tem_peso_escopo_e_descricao():
     for sinal, meta in RED_FLAGS.items():
         assert sinal
         assert isinstance(meta["pontos"], int)
-        if meta.get("automatico", True):
+        if meta.get("automatico", True) and not meta.get("pontos_dinamicos", False):
             assert meta["pontos"] > 0
         assert meta["escopo"] in {"fornecedor", "licitacao", "item", "orgao", "llm"}
         assert meta["descricao"]
@@ -305,15 +310,15 @@ def _sinais_cenario_todas_redflags() -> set[str]:
         con.execute(
             """
             INSERT INTO contratos VALUES
-            ('00000000000101','A','ORGAO A','M','PRE','OBJ A',200000.00,DATE '2026-01-10','A1',1,false),
-            ('00000000000101','A','ORGAO A','M','PRE','OBJ A',60000.00,DATE '2026-02-10','A2',1,false),
-            ('00000000000101','A','ORGAO A','M','PRE','OBJ A',50000.00,DATE '2026-03-10','A3',1,false),
-            ('00000000000102','B','ORGAO REC','M','PRE','OBJ REC',50000.00,DATE '2026-01-10','R1',3,false),
-            ('00000000000102','B','ORGAO REC','M','PRE','OBJ REC',50000.00,DATE '2026-02-10','R2',3,false),
-            ('00000000000102','B','ORGAO REC','M','PRE','OBJ REC',50000.00,DATE '2026-03-10','R3',3,false),
-            ('00000000000103','C','ORGAO FRAC','M','DSP','OBJ FRAC',60000.00,DATE '2026-01-10','F1',1,false),
-            ('00000000000103','C','ORGAO FRAC','M','DSP','OBJ FRAC',60000.00,DATE '2026-02-10','F2',1,false),
-            ('00000000000103','C','ORGAO FRAC','M','DSP','OBJ ALTO',150000.00,DATE '2026-03-10','F3',1,false)
+            ('00000000000101','A','ORGAO A','M','PRE','OBJ A',200000.00,DATE '2026-01-10','A1',1,false,'ORGA','A1','2026','PRE','00000000000101'),
+            ('00000000000101','A','ORGAO A','M','PRE','OBJ A',60000.00,DATE '2026-02-10','A2',1,false,'ORGA','A2','2026','PRE','00000000000101'),
+            ('00000000000101','A','ORGAO A','M','PRE','OBJ A',50000.00,DATE '2026-03-10','A3',1,false,'ORGA','A3','2026','PRE','00000000000101'),
+            ('00000000000102','B','ORGAO REC','M','PRE','OBJ REC',50000.00,DATE '2026-01-10','R1',3,false,'ORGR','R1','2026','PRE','00000000000102'),
+            ('00000000000102','B','ORGAO REC','M','PRE','OBJ REC',50000.00,DATE '2026-02-10','R2',3,false,'ORGR','R2','2026','PRE','00000000000102'),
+            ('00000000000102','B','ORGAO REC','M','PRE','OBJ REC',50000.00,DATE '2026-03-10','R3',3,false,'ORGR','R3','2026','PRE','00000000000102'),
+            ('00000000000103','C','ORGAO FRAC','M','DSP','OBJ FRAC',60000.00,DATE '2026-01-10','F1',1,false,'ORGF','F1','2026','DSP','00000000000103'),
+            ('00000000000103','C','ORGAO FRAC','M','DSP','OBJ FRAC',60000.00,DATE '2026-02-10','F2',1,false,'ORGF','F2','2026','DSP','00000000000103'),
+            ('00000000000103','C','ORGAO FRAC','M','DSP','OBJ ALTO',150000.00,DATE '2026-03-10','F3',1,false,'ORGF','F3','2026','DSP','00000000000103')
             """
         )
         for i in range(10):
@@ -321,9 +326,10 @@ def _sinais_cenario_todas_redflags() -> set[str]:
                 """
                 INSERT INTO contratos VALUES
                 ('00000000000104','D','ORGAO DISP','M','DSP','OBJ DISP',
-                 1000.00, DATE '2026-04-01', ?, 1, false)
+                 1000.00, DATE '2026-04-01', ?, 1, false,
+                 'ORGD', ?, '2026', 'DSP', '00000000000104')
                 """,
-                [f"D{i}"],
+                [f"D{i}", f"D{i}"],
             )
         for i in range(10):
             estimado = 40 if i == 9 else 10
@@ -419,7 +425,7 @@ def test_redflag_automatica_aciona(sinal, sinais_cenario_todas_redflags):
     assert sinal in sinais
 
 
-def test_criar_tabelas_score_marca_possivel_fraude_por_score_bruto():
+def test_criar_tabelas_score_aplica_pesos_rebalanceados():
     con = duckdb.connect(":memory:")
     try:
         _criar_schema_minimo(con)
@@ -427,9 +433,11 @@ def test_criar_tabelas_score_marca_possivel_fraude_por_score_bruto():
             """
             INSERT INTO contratos VALUES
             ('00000000000191', 'ACME', 'PM DE TESTE', 'TESTE', 'PREGAO', 'OBJ',
-             200000.00, DATE '2026-01-10', '1', 1, false),
+             200000.00, DATE '2026-01-10', '1', 1, false,
+             'ORGT', '1', '2026', 'PREGAO', '00000000000191'),
             ('00000000000191', 'ACME', 'PM DE TESTE', 'TESTE', 'PREGAO', 'OBJ',
-             1000.00, DATE '2025-08-01', '2', 1, false)
+             1000.00, DATE '2025-08-01', '2', 1, false,
+             'ORGT', '2', '2025', 'PREGAO', '00000000000191')
             """
         )
         con.execute(
@@ -461,7 +469,7 @@ def test_criar_tabelas_score_marca_possivel_fraude_por_score_bruto():
         score = con.execute(
             "SELECT score_bruto, score, possivel_fraude FROM scores_fornecedor"
         ).fetchone()
-        assert score == (126, 100, True)
+        assert score == (63, 63, False)
 
         sinais = {
             row[0]
@@ -472,5 +480,30 @@ def test_criar_tabelas_score_marca_possivel_fraude_por_score_bruto():
         assert "indicio_sancionado_ativo" in sinais
         assert "indicio_sancionado_historico" in sinais
         assert "indicio_empresa_inativa_com_contrato" in sinais
+
+        qtd_sancionado_ativo = con.execute(
+            """
+            SELECT COUNT(*)
+              FROM redflag_eventos
+             WHERE escopo = 'fornecedor'
+               AND entidade_id = '00000000000191'
+               AND sinal = 'indicio_sancionado_ativo'
+            """
+        ).fetchone()[0]
+        assert qtd_sancionado_ativo == 1
+
+        licitacoes_com_fornecedor_suspeito = con.execute(
+            """
+            SELECT entidade_id, pontos
+              FROM redflag_eventos
+             WHERE escopo = 'licitacao'
+               AND sinal = 'indicio_fornecedor_suspeito_na_licitacao'
+             ORDER BY entidade_id
+            """
+        ).fetchall()
+        assert licitacoes_com_fornecedor_suspeito == [
+            ("ORGT|1|2026|PREGAO", 13),
+            ("ORGT|2|2025|PREGAO", 13),
+        ]
     finally:
         con.close()

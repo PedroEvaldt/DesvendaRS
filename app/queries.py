@@ -816,16 +816,16 @@ def _risk_queue_fallback(
         SELECT *,
                LEAST(
                    100,
-                   CASE WHEN indicio_sancionado_ativo THEN 30 ELSE 0 END
-                   + CASE WHEN qtd_sancoes > 0 AND NOT indicio_sancionado_ativo THEN 12 ELSE 0 END
-                   + CASE WHEN indicio_empresa_inativa_com_contrato THEN 22 ELSE 0 END
-                   + CASE WHEN indicio_empresa_jovem_contrato_grande THEN 10 ELSE 0 END
-                   + CASE WHEN indicio_capital_baixo THEN 8 ELSE 0 END
-                   + CASE WHEN qtd_participantes <= 1 THEN 22 WHEN qtd_participantes <= 2 THEN 6 ELSE 0 END
-                   + CASE WHEN COALESCE(maior_razao_sobrepreco, 0) >= 5 THEN 18
-                          WHEN COALESCE(maior_razao_sobrepreco, 0) >= 3 THEN 6
+                   CASE WHEN indicio_sancionado_ativo THEN 15 ELSE 0 END
+                   + CASE WHEN qtd_sancoes > 0 AND NOT indicio_sancionado_ativo THEN 6 ELSE 0 END
+                   + CASE WHEN indicio_empresa_inativa_com_contrato THEN 11 ELSE 0 END
+                   + CASE WHEN indicio_empresa_jovem_contrato_grande THEN 5 ELSE 0 END
+                   + CASE WHEN indicio_capital_baixo THEN 4 ELSE 0 END
+                   + CASE WHEN qtd_participantes <= 1 THEN 11 WHEN qtd_participantes <= 2 THEN 3 ELSE 0 END
+                   + CASE WHEN COALESCE(maior_razao_sobrepreco, 0) >= 5 THEN 9
+                          WHEN COALESCE(maior_razao_sobrepreco, 0) >= 3 THEN 3
                           ELSE 0 END
-                   + CASE WHEN flag_covid AND COALESCE(qtd_sobrepreco, 0) > 0 THEN 10 ELSE 0 END
+                   + CASE WHEN flag_covid AND COALESCE(qtd_sobrepreco, 0) > 0 THEN 5 ELSE 0 END
                ) AS score_provisorio
           FROM base
          ORDER BY score_provisorio DESC, valor_contrato DESC NULLS LAST

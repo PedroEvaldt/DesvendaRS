@@ -13,202 +13,214 @@ import duckdb
 log = logging.getLogger(__name__)
 
 LIMIAR_POSSIVEL_FRAUDE = 100
+LIMIAR_FORNECEDOR_SUSPEITO = 50
+PERCENTUAL_SCORE_FORNECEDOR_NA_LICITACAO = 0.20
 
 RED_FLAGS: dict[str, dict[str, object]] = {
     "indicio_sancionado_ativo": {
-        "pontos": 30,
+        "pontos": 15,
         "forca": "Forte",
         "escopo": "fornecedor",
         "descricao": "Fornecedor tem sancao vigente na data do contrato.",
     },
     "indicio_sancionado_historico": {
-        "pontos": 12,
+        "pontos": 6,
         "forca": "Media",
         "escopo": "fornecedor",
         "descricao": "Fornecedor aparece em lista de sancoes fora da janela do contrato.",
     },
     "indicio_empresa_inativa_com_contrato": {
-        "pontos": 22,
+        "pontos": 11,
         "forca": "Forte",
         "escopo": "fornecedor",
         "descricao": "Empresa com situacao cadastral diferente de ativa possui contrato.",
     },
     "indicio_empresa_jovem_contrato_grande": {
-        "pontos": 10,
+        "pontos": 5,
         "forca": "Media",
         "escopo": "fornecedor",
         "descricao": "Empresa aberta ha menos de 180 dias recebeu contrato acima de R$ 100 mil.",
     },
     "indicio_capital_baixo": {
-        "pontos": 8,
+        "pontos": 4,
         "forca": "Media",
         "escopo": "fornecedor",
         "descricao": "Valor do contrato e mais de 10 vezes o capital social.",
     },
     "indicio_capital_irrisorio_contrato_alto": {
-        "pontos": 12,
+        "pontos": 6,
         "forca": "Media",
         "escopo": "fornecedor",
         "descricao": "Capital social ate R$ 1 mil combinado com contrato acima de R$ 100 mil.",
     },
     "indicio_socio_recente_antes_contrato": {
-        "pontos": 10,
+        "pontos": 5,
         "forca": "Media",
         "escopo": "fornecedor",
         "descricao": "Socio entrou ate 180 dias antes de contrato acima de R$ 100 mil.",
     },
     "indicio_socio_comum_competidores": {
-        "pontos": 22,
+        "pontos": 11,
         "forca": "Forte",
         "escopo": "fornecedor",
         "descricao": "Empresas concorrentes na mesma licitacao compartilham socio mascarado.",
     },
     "indicio_endereco_compartilhado_competidores": {
-        "pontos": 12,
+        "pontos": 6,
         "forca": "Media",
         "escopo": "fornecedor",
         "descricao": "Empresas concorrentes na mesma licitacao compartilham endereco cadastral.",
     },
     "indicio_rotacao_vencedores": {
-        "pontos": 20,
+        "pontos": 10,
         "forca": "Forte",
         "escopo": "fornecedor",
         "descricao": "Par de competidores frequentes alterna vitorias entre licitacoes.",
     },
     "indicio_fornecedor_concentrado_por_orgao": {
-        "pontos": 12,
+        "pontos": 6,
         "forca": "Media",
         "escopo": "fornecedor",
         "descricao": "Fornecedor concentra valor relevante de contratos em um unico orgao.",
     },
     "indicio_fornecedor_exclusivo_orgao": {
-        "pontos": 10,
+        "pontos": 5,
         "forca": "Media",
         "escopo": "fornecedor",
         "descricao": "Fornecedor recebe praticamente todos os contratos de um unico orgao.",
     },
     "alerta_competicao_zero": {
-        "pontos": 22,
+        "pontos": 11,
         "forca": "Forte",
         "escopo": "licitacao",
         "descricao": "Licitacao tem exatamente uma proposta classificada.",
     },
     "alerta_baixa_competicao": {
-        "pontos": 6,
+        "pontos": 3,
         "forca": "Fraca/contextual",
         "escopo": "licitacao",
         "descricao": "Licitacao tem ate dois participantes ou propostas classificadas.",
     },
     "alerta_cover_bidding": {
-        "pontos": 15,
+        "pontos": 8,
         "forca": "Media",
         "escopo": "licitacao",
         "descricao": "Segunda menor proposta e pelo menos 2 vezes a menor proposta.",
     },
     "alerta_dispensa_alto_valor": {
-        "pontos": 25,
+        "pontos": 13,
         "forca": "Forte",
         "escopo": "licitacao",
         "descricao": "Dispensa ou inexigibilidade com valor acima do limiar operacional.",
     },
     "indicio_fracionamento_dispensa": {
-        "pontos": 25,
+        "pontos": 13,
         "forca": "Forte",
         "escopo": "licitacao",
         "descricao": "Dispensas similares e repetidas somam valor alto em janela curta.",
     },
     "indicio_vencedor_recorrente_mesmo_objeto": {
-        "pontos": 15,
+        "pontos": 8,
         "forca": "Media",
         "escopo": "licitacao",
         "descricao": "Mesmo fornecedor vence repetidamente objeto parecido no mesmo orgao.",
     },
     "indicio_propostas_muito_proximas": {
-        "pontos": 12,
+        "pontos": 6,
         "forca": "Media",
         "escopo": "licitacao",
         "descricao": "Propostas classificadas tem coeficiente de variacao ate 1%.",
     },
     "indicio_cartel_recorrente": {
-        "pontos": 12,
+        "pontos": 6,
         "forca": "Media",
         "escopo": "licitacao",
         "descricao": "Par de CNPJs concorre junto em 5 ou mais licitacoes.",
     },
     "indicio_segundo_colocado_recorrente": {
-        "pontos": 15,
+        "pontos": 8,
         "forca": "Media",
         "escopo": "licitacao",
         "descricao": "Mesmo par vencedor/segundo colocado se repete em 3 ou mais licitacoes.",
     },
     "indicio_desconto_inexistente_em_ambiente_competitivo": {
-        "pontos": 8,
+        "pontos": 4,
         "forca": "Fraca/contextual",
         "escopo": "licitacao",
         "descricao": "Proposta vencedora quase nao oferece desconto apesar de competicao.",
     },
     "alerta_alteracao_regra_tardia": {
-        "pontos": 10,
+        "pontos": 5,
         "forca": "Media",
         "escopo": "licitacao",
         "descricao": "Alteracao ou republicacao ocorre mais de 30 dias apos a primeira publicacao.",
     },
     "indicio_alteracao_edital_beneficia_vencedor": {
-        "pontos": 20,
+        "pontos": 10,
         "forca": "Forte",
         "escopo": "licitacao",
         "descricao": "Vencedor apresenta proposta apos alteracao ou republicacao do edital.",
     },
     "alerta_anulacao_historica": {
-        "pontos": 5,
+        "pontos": 3,
         "forca": "Fraca/contextual",
         "escopo": "licitacao",
         "descricao": "Orgao tem historico recorrente de anulacoes ou suspensoes.",
     },
     "indicio_prazo_curto_publicacao_abertura": {
-        "pontos": 15,
+        "pontos": 8,
         "forca": "Media",
         "escopo": "licitacao",
         "descricao": "Primeira proposta ocorre poucos dias apos publicacao do edital.",
     },
+    "indicio_fornecedor_suspeito_na_licitacao": {
+        "pontos": 0,
+        "pontos_dinamicos": True,
+        "forca": "Media",
+        "escopo": "licitacao",
+        "descricao": (
+            "Fornecedor participante ou vencedor tem score proprio alto; a "
+            "licitacao recebe 20% do score capado do fornecedor."
+        ),
+    },
     "alerta_sobrepreco_alto": {
-        "pontos": 18,
+        "pontos": 9,
         "forca": "Media/Forte",
         "escopo": "item",
         "descricao": "Item homologado custa ao menos 5 vezes a mediana do grupo comparavel.",
     },
     "alerta_sobrepreco_moderado": {
-        "pontos": 6,
+        "pontos": 3,
         "forca": "Fraca/Media",
         "escopo": "item",
         "descricao": "Item homologado custa entre 3 e 5 vezes a mediana do grupo comparavel.",
     },
     "alerta_covid_sobrepreco": {
-        "pontos": 10,
+        "pontos": 5,
         "forca": "Media",
         "escopo": "item",
         "descricao": "Item COVID tambem apresenta indicio de sobrepreco.",
     },
     "indicio_preco_estimado_acima_mediana": {
-        "pontos": 15,
+        "pontos": 8,
         "forca": "Media/Forte",
         "escopo": "item",
         "descricao": "Valor unitario estimado esta ao menos 3 vezes acima da mediana historica.",
     },
     "indicio_proposta_item_perdedora_artificialmente_alta": {
-        "pontos": 12,
+        "pontos": 6,
         "forca": "Media",
         "escopo": "item",
         "descricao": "Segunda menor proposta de item e pelo menos 2 vezes a menor.",
     },
     "indicio_desclassificacao_conveniente": {
-        "pontos": 20,
+        "pontos": 10,
         "forca": "Forte",
         "escopo": "item",
         "descricao": "Proposta mais barata foi desclassificada e ha classificada mais cara.",
     },
     "indicio_fonte_referencia_ausente_preco_alto": {
-        "pontos": 8,
+        "pontos": 4,
         "forca": "Fraca/contextual",
         "escopo": "item",
         "automatico": False,
@@ -218,7 +230,7 @@ RED_FLAGS: dict[str, dict[str, object]] = {
         ),
     },
     "alerta_orcamento_sigiloso_baixa_competicao": {
-        "pontos": 8,
+        "pontos": 4,
         "forca": "Fraca/contextual",
         "escopo": "licitacao",
         "automatico": False,
@@ -228,42 +240,42 @@ RED_FLAGS: dict[str, dict[str, object]] = {
         ),
     },
     "llm_justificativa_inexigibilidade_fraca": {
-        "pontos": 20,
+        "pontos": 10,
         "forca": "LLM/textual forte",
         "escopo": "llm",
         "automatico": False,
         "descricao": "Avaliacao textual de justificativa fraca para dispensa/inexigibilidade.",
     },
     "llm_objeto_vago_ou_direcionado": {
-        "pontos": 12,
+        "pontos": 6,
         "forca": "LLM/textual media",
         "escopo": "llm",
         "automatico": False,
         "descricao": "Avaliacao textual de objeto vago, generico ou direcionado.",
     },
     "llm_cnae_incompativel_objeto": {
-        "pontos": 15,
+        "pontos": 8,
         "forca": "LLM/textual media",
         "escopo": "llm",
         "automatico": False,
         "descricao": "Avaliacao textual de compatibilidade entre CNAE, objeto e itens.",
     },
     "llm_fracionamento_semantico_objetos": {
-        "pontos": 20,
+        "pontos": 10,
         "forca": "LLM/textual forte",
         "escopo": "llm",
         "automatico": False,
         "descricao": "Avaliacao semantica de objetos similares em processos distintos.",
     },
     "llm_alteracao_edital_direcionadora": {
-        "pontos": 18,
+        "pontos": 9,
         "forca": "LLM/textual forte",
         "escopo": "llm",
         "automatico": False,
         "descricao": "Avaliacao textual de alteracao de edital potencialmente direcionadora.",
     },
     "llm_impugnacao_indica_restricao": {
-        "pontos": 15,
+        "pontos": 8,
         "forca": "LLM/textual media",
         "escopo": "llm",
         "automatico": False,
@@ -284,26 +296,26 @@ RED_FLAGS: dict[str, dict[str, object]] = {
         "descricao": "Avaliacao contextual de plausibilidade de preco aparentemente alto.",
     },
     "llm_texto_copiado_entre_editais": {
-        "pontos": 8,
+        "pontos": 4,
         "forca": "LLM/textual contextual",
         "escopo": "llm",
         "automatico": False,
         "descricao": "Avaliacao textual de alta semelhanca entre editais ou justificativas.",
     },
     "indicio_orgao_sobrepreco_recorrente": {
-        "pontos": 12,
+        "pontos": 6,
         "forca": "Media",
         "escopo": "orgao",
         "descricao": "Orgao aparece recorrentemente em itens com indicio de sobrepreco.",
     },
     "indicio_orgao_baixa_competicao_recorrente": {
-        "pontos": 10,
+        "pontos": 5,
         "forca": "Media",
         "escopo": "orgao",
         "descricao": "Orgao tem recorrencia de licitacoes com baixa competicao.",
     },
     "indicio_orgao_dispensas_recorrentes": {
-        "pontos": 12,
+        "pontos": 6,
         "forca": "Media",
         "escopo": "orgao",
         "descricao": "Orgao usa dispensa ou inexigibilidade de forma recorrente.",
@@ -320,6 +332,7 @@ def criar_tabelas_score(
     log.info("Calculando red flags e scores")
     _criar_tabela_eventos(con)
     _inserir_redflags_fornecedor(con)
+    _inserir_redflags_fornecedor_suspeito_na_licitacao(con)
     _inserir_redflags_licitacao(con)
     _inserir_redflags_item(con)
     _inserir_redflags_orgao(con)
@@ -372,21 +385,34 @@ def _inserir_redflags_fornecedor(con: duckdb.DuckDBPyConnection) -> None:
         con,
         "indicio_sancionado_ativo",
         """
+        WITH sancoes_ativas AS (
+            SELECT c.cnpj_fornecedor,
+                   MIN(c.data_contrato) AS primeira_data_contrato,
+                   COUNT(*) AS qtd_contratos_atingidos,
+                   STRING_AGG(DISTINCT s.fonte, ', ' ORDER BY s.fonte) AS fontes,
+                   MIN(s.data_inicio) AS primeira_sancao_inicio,
+                   MAX(s.data_fim) AS ultima_sancao_fim
+              FROM contratos c
+              JOIN sancoes s ON c.cnpj_fornecedor = s.cnpj
+             WHERE c.data_contrato IS NOT NULL
+               AND c.data_contrato >= COALESCE(s.data_inicio, DATE '1900-01-01')
+               AND c.data_contrato <= COALESCE(s.data_fim, DATE '2100-12-31')
+             GROUP BY c.cnpj_fornecedor
+        )
         SELECT 'fornecedor' AS escopo,
-               c.cnpj_fornecedor AS entidade_id,
+               cnpj_fornecedor AS entidade_id,
                NULL AS cd_orgao, NULL AS nr_licitacao, NULL AS ano_licitacao,
                NULL AS cd_tipo_modalidade, NULL AS nr_lote, NULL AS nr_item,
-               c.cnpj_fornecedor AS cnpj,
+               cnpj_fornecedor AS cnpj,
                'indicio_sancionado_ativo' AS sinal,
-               'fonte=' || COALESCE(s.fonte, '?') ||
-               '; contrato=' || COALESCE(CAST(c.data_contrato AS VARCHAR), '?') ||
-               '; sancao=' || COALESCE(CAST(s.data_inicio AS VARCHAR), '?') ||
-               '..' || COALESCE(CAST(s.data_fim AS VARCHAR), 'aberta') AS evidencia
-          FROM contratos c
-          JOIN sancoes s ON c.cnpj_fornecedor = s.cnpj
-         WHERE c.data_contrato IS NOT NULL
-           AND c.data_contrato >= COALESCE(s.data_inicio, DATE '1900-01-01')
-           AND c.data_contrato <= COALESCE(s.data_fim, DATE '2100-12-31')
+               'fontes=' || COALESCE(fontes, '?') ||
+               '; primeira_data_contrato=' ||
+               COALESCE(CAST(primeira_data_contrato AS VARCHAR), '?') ||
+               '; sancao=' || COALESCE(CAST(primeira_sancao_inicio AS VARCHAR), '?') ||
+               '..' || COALESCE(CAST(ultima_sancao_fim AS VARCHAR), 'aberta') ||
+               '; contratos_atingidos=' || CAST(qtd_contratos_atingidos AS VARCHAR)
+               AS evidencia
+          FROM sancoes_ativas
         """,
     )
     _insert(
@@ -725,6 +751,74 @@ def _inserir_redflags_fornecedor(con: duckdb.DuckDBPyConnection) -> None:
            AND qtd_contratos_orgao >= 3
            AND valor_orgao / valor_total >= 0.95
         """,
+    )
+
+
+def _inserir_redflags_fornecedor_suspeito_na_licitacao(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    sinal = "indicio_fornecedor_suspeito_na_licitacao"
+    forca = str(RED_FLAGS[sinal]["forca"])
+    con.execute(
+        f"""
+        INSERT INTO redflag_eventos
+        WITH scores_fornecedor_parciais AS (
+            SELECT entidade_id AS cnpj,
+                   SUM(pontos)::INTEGER AS score_bruto_fornecedor,
+                   LEAST(SUM(pontos), 100)::INTEGER AS score_fornecedor
+              FROM redflag_eventos
+             WHERE escopo = 'fornecedor'
+             GROUP BY entidade_id
+            HAVING LEAST(SUM(pontos), 100) >= {LIMIAR_FORNECEDOR_SUSPEITO}
+        ),
+        fornecedores_licitacao AS (
+            SELECT DISTINCT cd_orgao, nr_licitacao, ano_licitacao,
+                   cd_tipo_modalidade, cnpj_fornecedor AS cnpj,
+                   'participante' AS papel
+              FROM contratos
+             WHERE cd_orgao IS NOT NULL
+               AND nr_licitacao IS NOT NULL
+               AND ano_licitacao IS NOT NULL
+               AND cd_tipo_modalidade IS NOT NULL
+               AND cnpj_fornecedor IS NOT NULL
+            UNION ALL
+            SELECT DISTINCT cd_orgao, nr_licitacao, ano_licitacao,
+                   cd_tipo_modalidade, cnpj_vencedor AS cnpj,
+                   'vencedor' AS papel
+              FROM contratos
+             WHERE cd_orgao IS NOT NULL
+               AND nr_licitacao IS NOT NULL
+               AND ano_licitacao IS NOT NULL
+               AND cd_tipo_modalidade IS NOT NULL
+               AND cnpj_vencedor IS NOT NULL
+        ),
+        licitacoes AS (
+            SELECT cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade,
+                   cnpj, STRING_AGG(DISTINCT papel, ', ' ORDER BY papel) AS papeis
+              FROM fornecedores_licitacao
+             GROUP BY 1,2,3,4,5
+        )
+        SELECT 'licitacao' AS escopo,
+               l.cd_orgao || '|' || l.nr_licitacao || '|' || l.ano_licitacao ||
+               '|' || l.cd_tipo_modalidade AS entidade_id,
+               l.cd_orgao, l.nr_licitacao, l.ano_licitacao, l.cd_tipo_modalidade,
+               NULL AS nr_lote, NULL AS nr_item, l.cnpj,
+               '{sinal}' AS sinal,
+               CEIL(
+                   s.score_fornecedor * {PERCENTUAL_SCORE_FORNECEDOR_NA_LICITACAO}
+               )::INTEGER AS pontos,
+               '{forca}' AS forca,
+               'cnpj=' || l.cnpj ||
+               '; papeis=' || l.papeis ||
+               '; score_fornecedor=' || CAST(s.score_fornecedor AS VARCHAR) ||
+               '; score_bruto_fornecedor=' ||
+               CAST(s.score_bruto_fornecedor AS VARCHAR) ||
+               '; percentual=' ||
+               CAST({PERCENTUAL_SCORE_FORNECEDOR_NA_LICITACAO} AS VARCHAR)
+               AS evidencia
+          FROM licitacoes l
+          JOIN scores_fornecedor_parciais s ON s.cnpj = l.cnpj
+        """
     )
 
 
