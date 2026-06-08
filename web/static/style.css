@@ -296,6 +296,13 @@ svg { display: block; }
 .btn:hover { background: var(--brand-dark); box-shadow: 0 8px 20px rgba(8,127,109,.18); transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
 .btn svg { width: 18px; }
+.btn--share { width: 100%; }
+.btn--share.is-busy {
+  background: var(--ink-soft);
+  box-shadow: none;
+  cursor: wait;
+  transform: none;
+}
 .btn--ghost { color: var(--ink); background: white; border: 1px solid var(--line); }
 .btn--ghost:hover { color: var(--brand-dark); background: var(--brand-soft); box-shadow: none; }
 
@@ -636,6 +643,139 @@ svg { display: block; }
 .error-card h1 { margin: 0 0 .7rem; font-size: 1.8rem; letter-spacing: -.04em; }
 .error-card p { color: var(--muted); }
 .command { margin-top: 1.2rem; padding: 1rem; color: #d8e8e4; background: var(--ink); border-radius: .75rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; text-align: left; overflow-x: auto; }
+
+/* Cartão usado apenas para gerar o PNG de compartilhamento. */
+.share-export {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  width: 960px;
+  background: white;
+  pointer-events: none;
+}
+.share-card {
+  width: 960px;
+  padding: 44px;
+  color: #102a43;
+  background: #ffffff;
+  border: 1px solid #dce4e8;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.share-card__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 28px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #dce4e8;
+}
+.share-card__header div { display: grid; gap: 4px; }
+.share-card__header strong { color: #087f6d; font-size: 24px; letter-spacing: 0; }
+.share-card__header span { color: #6b7c8f; font-size: 15px; font-weight: 700; }
+.share-card h2 {
+  margin: 28px 0 16px;
+  color: #102a43;
+  font-size: 36px;
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+.share-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+.share-card__meta span {
+  padding: 8px 12px;
+  color: #486581;
+  background: #f6f7f3;
+  border: 1px solid #eaf0f2;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 750;
+}
+.share-card__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.share-card__metrics div {
+  min-height: 118px;
+  padding: 18px;
+  background: #f8faf9;
+  border: 1px solid #dce4e8;
+  border-radius: 12px;
+}
+.share-card__metrics span {
+  display: block;
+  color: #6b7c8f;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+.share-card__metrics strong {
+  display: block;
+  margin-top: 12px;
+  color: #102a43;
+  font-size: 28px;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+.share-card__metrics small { color: #6b7c8f; font-size: 14px; font-weight: 750; }
+.share-card__section {
+  padding: 22px;
+  background: #fffdf6;
+  border: 1px solid #f0e4c2;
+  border-radius: 14px;
+}
+.share-card__section h3 {
+  margin: 0 0 14px;
+  color: #102a43;
+  font-size: 18px;
+}
+.share-card__section ul {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.share-card__section li {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.share-card__section p { margin: 0; color: #486581; font-size: 15px; line-height: 1.45; }
+.share-card__severity {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 5px 9px;
+  color: #875b0f;
+  background: #fff3d2;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+.share-card__severity--alto { color: #982d3d; background: #fdecef; }
+.share-card__severity--baixo { color: #256347; background: #e8f5ee; }
+.share-card__more, .share-card__empty {
+  margin-top: 14px !important;
+  color: #6b7c8f !important;
+  font-size: 13px !important;
+  font-weight: 750;
+}
+.share-card footer {
+  margin-top: 20px;
+  color: #6b7c8f;
+  font-size: 13px;
+  font-weight: 650;
+}
 
 .site-footer { padding: 3rem 0; color: #b7c7d4; background: #0c2236; }
 .footer-shell { display: grid; grid-template-columns: 1fr 1.25fr auto; align-items: start; gap: 3rem; }

@@ -2,6 +2,7 @@
 {% block title %}{{ (empresa.razao_social if empresa else cnpj) }} — DesvendaRS{% endblock %}
 
 {% block content %}
+{% set total_eventos = (eventos | sum(attribute='ocorrencias')) if eventos else 0 %}
 <section class="page-hero">
   <div class="shell">
     <div class="breadcrumb">
@@ -38,6 +39,67 @@
     </div>
   </div>
 </section>
+
+<div class="share-export" id="empresa-share-card" aria-hidden="true">
+  <article class="share-card">
+    <header class="share-card__header">
+      <div>
+        <strong>DesvendaRS</strong>
+        <span>Dossiê do fornecedor</span>
+      </div>
+      <span>CNPJ {{ cnpj | cnpj }}</span>
+    </header>
+    <h2>{{ empresa.razao_social if empresa else "(empresa sem cadastro)" }}</h2>
+    <div class="share-card__meta">
+      <span>CNPJ {{ cnpj | cnpj }}</span>
+      {% if empresa %}
+      <span>{{ empresa.situacao_cadastral | situacao_cadastral }}</span>
+      <span>{{ empresa.porte or "Porte não informado" }}</span>
+      {% else %}
+      <span>Cadastro não encontrado</span>
+      {% endif %}
+    </div>
+    <div class="share-card__metrics">
+      <div>
+        <span>Score de risco</span>
+        <strong>{{ score.score if score else "—" }}</strong>
+        <small>{% if score %}/100{% else %}sem score{% endif %}</small>
+      </div>
+      <div>
+        <span>Red flags</span>
+        <strong>{{ total_eventos }}</strong>
+      </div>
+      <div>
+        <span>Contratos</span>
+        <strong>{{ contratos|length }}</strong>
+      </div>
+      <div>
+        <span>Sanções</span>
+        <strong>{{ sancoes|length }}</strong>
+      </div>
+    </div>
+    <section class="share-card__section">
+      <h3>Principais indícios</h3>
+      {% if eventos %}
+      <ul>
+        {% for ev in eventos %}
+        {% if loop.index <= 3 %}
+        <li>
+          <span class="share-card__severity">{{ ev.forca }}</span>
+          <p>{{ ev.descricao }}</p>
+        </li>
+        {% endif %}
+        {% endfor %}
+      </ul>
+      {% set extras_eventos = (eventos|length) - 3 %}
+      {% if extras_eventos > 0 %}<p class="share-card__more">+{{ extras_eventos }} indício{{ "s" if extras_eventos != 1 }} no dossiê completo</p>{% endif %}
+      {% else %}
+      <p class="share-card__empty">Nenhum indício automático registrado.</p>
+      {% endif %}
+    </section>
+    <footer>Indícios para revisão humana. Não constitui conclusão de irregularidade.</footer>
+  </article>
+</div>
 
 <section class="page-section">
   <div class="shell detail-layout">
@@ -167,6 +229,10 @@
     </div>
 
     <aside class="detail-aside">
+      <button class="btn btn--share" type="button" data-export-trigger data-export-target="#empresa-share-card" data-export-filename="desvendars-empresa-{{ cnpj }}.png">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.6 6.8-4.2M8.6 13.4l6.8 4.2"/></svg>
+        Compartilhar
+      </button>
       {% if empresa %}
       <section class="content-card">
         <div class="content-card__head"><div><h2>Cadastro</h2><p>Dados cadastrais da empresa.</p></div></div>

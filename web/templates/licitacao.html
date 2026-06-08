@@ -67,6 +67,63 @@
   </div>
 </section>
 
+<div class="share-export" id="licitacao-share-card" aria-hidden="true">
+  <article class="share-card">
+    <header class="share-card__header">
+      <div>
+        <strong>DesvendaRS</strong>
+        <span>Dossiê da licitação</span>
+      </div>
+      <span>{{ cabecalho.data_contrato | data_br }}</span>
+    </header>
+    <h2>{{ cabecalho.objeto or "Objeto não informado" }}</h2>
+    <div class="share-card__meta">
+      <span>{{ cabecalho.orgao }}</span>
+      <span>{{ cabecalho.municipio }}</span>
+      <span>{{ cabecalho.modalidade or "Modalidade não informada" }}</span>
+    </div>
+    <div class="share-card__metrics">
+      <div>
+        <span>Score de risco</span>
+        <strong>{{ score.score if score else "—" }}</strong>
+        <small>{% if score %}/100{% else %}sem score{% endif %}</small>
+      </div>
+      <div>
+        <span>Valor homologado</span>
+        <strong>{{ cabecalho.valor_contrato | moeda }}</strong>
+      </div>
+      <div>
+        <span>Participantes</span>
+        <strong>{{ cabecalho.qtd_participantes if cabecalho.qtd_participantes is not none else "—" }}</strong>
+      </div>
+      <div>
+        <span>Indícios registrados</span>
+        <strong>{{ total_alertas }}</strong>
+      </div>
+    </div>
+    <section class="share-card__section">
+      <h3>Alertas para revisão</h3>
+      {% if alertas %}
+      <ul>
+        {% for a in alertas %}
+        {% if loop.index <= 3 %}
+        <li>
+          <span class="share-card__severity share-card__severity--{{ a.severidade }}">{{ {'alto':'Alto','medio':'Médio','baixo':'Baixo'}[a.severidade] }}</span>
+          <p>{{ a.descricao }}</p>
+        </li>
+        {% endif %}
+        {% endfor %}
+      </ul>
+      {% set extras_alertas = (alertas|length) - 3 %}
+      {% if extras_alertas > 0 %}<p class="share-card__more">+{{ extras_alertas }} alerta{{ "s" if extras_alertas != 1 }} no dossiê completo</p>{% endif %}
+      {% else %}
+      <p class="share-card__empty">Nenhum alerta automático forte registrado.</p>
+      {% endif %}
+    </section>
+    <footer>Indícios para revisão humana. Não constitui conclusão de irregularidade.</footer>
+  </article>
+</div>
+
 <section class="page-section page-section--white">
   <div class="shell detail-layout">
     <div class="detail-main">
@@ -252,6 +309,10 @@
     </div>
 
     <aside class="detail-aside">
+      <button class="btn btn--share" type="button" data-export-trigger data-export-target="#licitacao-share-card" data-export-filename="desvendars-licitacao-{{ chave.cd_orgao }}-{{ chave.nr_licitacao }}-{{ chave.ano_licitacao }}-{{ chave.cd_tipo_modalidade }}.png">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.6 6.8-4.2M8.6 13.4l6.8 4.2"/></svg>
+        Compartilhar
+      </button>
       {% if score %}
       {% set faixa = score.score | nivel %}
       <section class="content-card score-card">
