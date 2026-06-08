@@ -57,7 +57,7 @@ def test_busca_licitacoes_por_cidade(client):
     assert r.status_code == 200
     assert "BETA TECNOLOGIA" in r.text
     assert "Score" in r.text
-    assert "3 sinais" in r.text
+    assert "4 sinais" in r.text
 
 
 def test_busca_licitacoes_permite_alternar_ordenacao(client):
@@ -84,12 +84,19 @@ def test_licitacao_sem_vencedor_tem_link_e_dossie(client):
     assert 'href="/empresas/None"' not in detalhe.text
 
 
-def test_dossie_licitacao_mostra_vencedora_e_perdedoras(client):
+def test_dossie_licitacao_separa_vencedoras_e_nao_vencedoras(client):
     r = client.get("/licitacoes/003/300/2026/PRE")
     assert r.status_code == 200
-    assert "BETA TECNOLOGIA" in r.text          # vencedora
-    assert "DELTA SOLUCOES" in r.text           # participante/perdedora
-    assert "EPSILON SISTEMAS" in r.text         # perdedora
+    assert "Empresas vencedoras" in r.text
+    assert "Empresas não vencedoras" in r.text
+    assert "Todos os participantes" not in r.text
+    assert "Propostas concorrentes" not in r.text
+    assert "BETA TECNOLOGIA" in r.text
+    assert "R$ 100.000,00" in r.text
+    assert "DELTA SOLUCOES" in r.text
+    assert "R$ 250.000,00" in r.text
+    assert "EPSILON SISTEMAS" in r.text
+    assert "R$ 260.000,00" in r.text
 
 
 def test_home_mostra_panorama_e_metodologia(client):

@@ -413,6 +413,90 @@ def contratos_da_licitacao(
     )
 
 
+def vencedoras_da_licitacao(
+    con: duckdb.DuckDBPyConnection,
+    chave: dict[str, str],
+) -> pd.DataFrame:
+    """Fornecedores homologados por item ou vencedores gerais, sem duplicatas."""
+    cte_vencedoras, params = _vencedoras_cte(chave)
+    return query_df(
+        con,
+        f"""
+        WITH {cte_vencedoras}
+        SELECT v.cnpj_vencedor,
+               COALESCE(e.razao_social, v.razao_fonte) AS razao_social,
+               p.resultado_proposta,
+               p.valor_total_proposta,
+               p.percentual_desconto,
+               p.data_proposta,
+               e.capital_social,
+               e.situacao_cadastral
+          FROM vencedoras v
+          LEFT JOIN propostas p
+            ON p.cd_orgao = v.cd_orgao
+           AND p.nr_licitacao = v.nr_licitacao
+           AND p.ano_licitacao = v.ano_licitacao
+           AND p.cd_tipo_modalidade = v.cd_tipo_modalidade
+           AND p.cnpj_proposta = v.cnpj_vencedor
+          LEFT JOIN empresas e ON e.cnpj = v.cnpj_vencedor
+         ORDER BY p.valor_total_proposta ASC NULLS LAST, v.cnpj_vencedor
+        """,
+        params,
+    )
+
+
+def _vencedoras_cte(chave: dict[str, str]) -> tuple[str, list[Any]]:
+    """CTE compartilhada para identificar todas as vencedoras da licitação."""
+    where_itens, params_itens = _chave_where(chave, alias="i")
+    where_contratos, params_contratos = _chave_where(chave, alias="c")
+    return (
+        f"""
+        fontes_vencedoras AS (
+            SELECT i.cd_orgao,
+                   i.nr_licitacao,
+                   i.ano_licitacao,
+                   i.cd_tipo_modalidade,
+                   i.cnpj_fornecedor AS cnpj_vencedor,
+                   NULL::VARCHAR AS razao_fonte
+              FROM itens i
+             WHERE {where_itens}
+               AND i.cnpj_fornecedor IS NOT NULL
+
+            UNION ALL
+
+            SELECT c.cd_orgao,
+                   c.nr_licitacao,
+                   c.ano_licitacao,
+                   c.cd_tipo_modalidade,
+                   c.cnpj_vencedor,
+                   MAX(
+                       CASE
+                           WHEN c.cnpj_fornecedor = c.cnpj_vencedor
+                           THEN c.razao_social
+                       END
+                   ) AS razao_fonte
+              FROM contratos c
+             WHERE {where_contratos}
+               AND c.cnpj_vencedor IS NOT NULL
+             GROUP BY c.cd_orgao, c.nr_licitacao, c.ano_licitacao,
+                      c.cd_tipo_modalidade, c.cnpj_vencedor
+        ),
+        vencedoras AS (
+            SELECT cd_orgao,
+                   nr_licitacao,
+                   ano_licitacao,
+                   cd_tipo_modalidade,
+                   cnpj_vencedor,
+                   MAX(razao_fonte) AS razao_fonte
+              FROM fontes_vencedoras
+             GROUP BY cd_orgao, nr_licitacao, ano_licitacao,
+                      cd_tipo_modalidade, cnpj_vencedor
+        )
+        """,
+        params_itens + params_contratos,
+    )
+
+
 def _chave_where(chave: dict[str, str], *, alias: str = "") -> tuple[str, list[Any]]:
     """Cláusula WHERE para a chave composta da licitação (com alias opcional)."""
     prefixo = f"{alias}." if alias else ""
@@ -421,23 +505,17 @@ def _chave_where(chave: dict[str, str], *, alias: str = "") -> tuple[str, list[A
     return " AND ".join(clauses), params
 
 
-def propostas_concorrentes(
+def propostas_nao_vencedoras(
     con: duckdb.DuckDBPyConnection,
     chave: dict[str, str],
-    cnpj_vencedor: str | None,
 ) -> pd.DataFrame:
-    """Propostas das empresas que concorreram na licitação e NÃO venceram.
-
-    Lista ordenada do menor ao maior valor. Exclui o `cnpj_vencedor` (quando
-    conhecido) para sobrar só as perdedoras.
-    """
-    where, params = _chave_where(chave, alias="p")
-    if cnpj_vencedor:
-        where += " AND (p.cnpj_proposta IS NULL OR p.cnpj_proposta <> ?)"
-        params.append(cnpj_vencedor)
+    """Propostas que não pertencem a nenhum vencedor oficial da licitação."""
+    cte_vencedoras, params_vencedoras = _vencedoras_cte(chave)
+    where_propostas, params_propostas = _chave_where(chave, alias="p")
     return query_df(
         con,
         f"""
+        WITH {cte_vencedoras}
         SELECT p.cnpj_proposta,
                e.razao_social,
                p.resultado_proposta,
@@ -446,10 +524,16 @@ def propostas_concorrentes(
                p.data_proposta
           FROM propostas p
           LEFT JOIN empresas e ON e.cnpj = p.cnpj_proposta
-         WHERE {where}
+         WHERE {where_propostas}
+           AND EXISTS (SELECT 1 FROM vencedoras)
+           AND NOT EXISTS (
+               SELECT 1
+                 FROM vencedoras v
+                WHERE v.cnpj_vencedor = p.cnpj_proposta
+           )
          ORDER BY p.valor_total_proposta ASC NULLS LAST
         """,
-        params,
+        params_vencedoras + params_propostas,
     )
 
 
@@ -458,7 +542,7 @@ def licitacao_detalhe(
     status: DatabaseStatus,
     chave: dict[str, str],
 ) -> dict[str, Any]:
-    """Dados do dossiê de uma licitação: cabeçalho, vencedora, sanções, sinais e perdedoras."""
+    """Dados do dossiê, incluindo todas as vencedoras e não vencedoras."""
     where, params = _chave_where(chave)
     cabecalho = query_df(
         con,
@@ -481,26 +565,31 @@ def licitacao_detalhe(
         params,
     )
 
-    cnpj_vencedor = None
-    if not cabecalho.empty and pd.notna(cabecalho.iloc[0]["cnpj_vencedor"]):
-        cnpj_vencedor = str(cabecalho.iloc[0]["cnpj_vencedor"])
+    vencedoras = vencedoras_da_licitacao(con, chave)
+    cnpjs_vencedores = (
+        vencedoras["cnpj_vencedor"].dropna().astype(str).tolist()
+        if not vencedoras.empty
+        else []
+    )
+    cnpj_vencedor = cnpjs_vencedores[0] if cnpjs_vencedores else None
 
     empresa = pd.DataFrame()
     sancoes = pd.DataFrame()
-    if cnpj_vencedor:
-        empresa = query_df(con, "SELECT * FROM empresas WHERE cnpj = ? LIMIT 1", [cnpj_vencedor])
+    if cnpjs_vencedores:
+        empresa = vencedoras.rename(columns={"cnpj_vencedor": "cnpj"})
+        placeholders = ", ".join("?" for _ in cnpjs_vencedores)
         sancoes = query_df(
             con,
-            """
+            f"""
             SELECT tipo_sancao, orgao_sancionador, data_inicio, data_fim, fonte
               FROM sancoes
-             WHERE cnpj = ?
+             WHERE cnpj IN ({placeholders})
              ORDER BY data_inicio DESC NULLS LAST
             """,
-            [cnpj_vencedor],
+            cnpjs_vencedores,
         )
 
-    perdedoras = propostas_concorrentes(con, chave, cnpj_vencedor)
+    nao_vencedoras = propostas_nao_vencedoras(con, chave)
     participantes = contratos_da_licitacao(con, chave)
     sinais = _sinais_licitacao(con, status, chave, cabecalho, empresa, sancoes)
     alertas = alertas_licitacao(con, status, chave)
@@ -510,9 +599,10 @@ def licitacao_detalhe(
     return {
         "cabecalho": cabecalho,
         "empresa": empresa,
+        "vencedoras": vencedoras,
         "sancoes": sancoes,
         "contratos": participantes,
-        "perdedoras": perdedoras,
+        "nao_vencedoras": nao_vencedoras,
         "sinais": sinais,
         "alertas": alertas,
         "score": score,
@@ -756,11 +846,13 @@ def licitacao_ai_context(
     return {
         "chave": chave,
         "cabecalho": _df_records(detalhe["cabecalho"], limit=1),
-        "empresa_vencedora": _df_records(detalhe["empresa"], limit=1),
+        "empresas_vencedoras": _df_records(detalhe["vencedoras"], limit=30),
         "sancoes_vencedora": _df_records(detalhe["sancoes"], limit=10),
         "participantes_contratos": _df_records(detalhe["contratos"], limit=30),
         "propostas": _df_records(propostas, limit=30),
-        "propostas_perdedoras": _df_records(detalhe["perdedoras"], limit=30),
+        "propostas_nao_vencedoras": _df_records(
+            detalhe["nao_vencedoras"], limit=30
+        ),
         "itens": _df_records(itens, limit=20),
         "indicios_sobrepreco": _df_records(sobrepreco, limit=10),
         "eventos": _df_records(eventos, limit=25),

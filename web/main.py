@@ -263,15 +263,13 @@ def licitacao(
             {
                 "chave": chave,
                 "cabecalho": _primeiro(detalhe["cabecalho"]),
-                "empresa": _primeiro(detalhe["empresa"]),
                 "sinais": detalhe["sinais"],
                 "alertas": _registros(detalhe["alertas"]),
                 "score": _primeiro(detalhe["score"]),
                 "timeline": detalhe["timeline"],
                 "sancoes": _registros(detalhe["sancoes"]),
-                "participantes": _registros(detalhe["contratos"]),
-                "perdedoras": _registros(detalhe["perdedoras"]),
-                "cnpj_vencedor": detalhe["cnpj_vencedor"],
+                "vencedoras": _registros(detalhe["vencedoras"]),
+                "nao_vencedoras": _registros(detalhe["nao_vencedoras"]),
                 "ai_overview": ai_overview,
             },
         )

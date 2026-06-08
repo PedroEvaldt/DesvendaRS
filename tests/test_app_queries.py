@@ -104,6 +104,8 @@ def test_dossie_licitacao_sem_vencedor_mantem_dados_do_processo(mock_db):
     assert detalhe["cabecalho"].iloc[0]["municipio"] == "BAGE"
     assert detalhe["cnpj_vencedor"] is None
     assert detalhe["empresa"].empty
+    assert detalhe["vencedoras"].empty
+    assert detalhe["nao_vencedoras"].empty
 
 
 def test_licitacoes_por_municipio_funciona_sem_tabela_de_score(mock_db):
@@ -165,7 +167,7 @@ def test_licitacoes_por_municipio_ordem_invalida_volta_para_score(
     assert "ORDER BY score DESC NULLS LAST" in sql_executado
 
 
-def test_propostas_concorrentes_exclui_vencedora(mock_db):
+def test_propostas_nao_vencedoras_exclui_vencedora(mock_db):
     con, _ = mock_db
     chave = {
         "cd_orgao": "003",
@@ -173,10 +175,116 @@ def test_propostas_concorrentes_exclui_vencedora(mock_db):
         "ano_licitacao": "2026",
         "cd_tipo_modalidade": "PRE",
     }
-    df = queries.propostas_concorrentes(con, chave, "32345678000195")
+    df = queries.propostas_nao_vencedoras(con, chave)
     cnpjs = list(df["cnpj_proposta"])
     assert cnpjs == ["52345678000195", "62345678000195"]  # ordenado por valor crescente
     assert "32345678000195" not in cnpjs
+
+
+def test_separa_multiplas_vencedoras_das_demais_propostas():
+    con = duckdb.connect(":memory:")
+    try:
+        con.execute(
+            """
+            CREATE TABLE contratos (
+                cd_orgao VARCHAR,
+                nr_licitacao VARCHAR,
+                ano_licitacao VARCHAR,
+                cd_tipo_modalidade VARCHAR,
+                cnpj_fornecedor VARCHAR,
+                cnpj_vencedor VARCHAR,
+                razao_social VARCHAR
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO contratos VALUES
+                ('001', '10', '2026', 'PRE', '11111111000111',
+                 '11111111000111', 'VENCEDORA UM')
+            """
+        )
+        con.execute(
+            """
+            CREATE TABLE itens (
+                cd_orgao VARCHAR,
+                nr_licitacao VARCHAR,
+                ano_licitacao VARCHAR,
+                cd_tipo_modalidade VARCHAR,
+                cnpj_fornecedor VARCHAR
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO itens VALUES
+                ('001', '10', '2026', 'PRE', '11111111000111'),
+                ('001', '10', '2026', 'PRE', '22222222000122')
+            """
+        )
+        con.execute(
+            """
+            CREATE TABLE propostas (
+                cd_orgao VARCHAR,
+                nr_licitacao VARCHAR,
+                ano_licitacao VARCHAR,
+                cd_tipo_modalidade VARCHAR,
+                cnpj_proposta VARCHAR,
+                resultado_proposta VARCHAR,
+                valor_total_proposta DECIMAL(18, 2),
+                percentual_desconto DECIMAL(18, 2),
+                data_proposta DATE
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO propostas VALUES
+                ('001', '10', '2026', 'PRE', '11111111000111', 'C',
+                 100.00, 0, DATE '2026-01-01'),
+                ('001', '10', '2026', 'PRE', '22222222000122', 'C',
+                 150.00, 0, DATE '2026-01-01'),
+                ('001', '10', '2026', 'PRE', '33333333000133', 'C',
+                 175.00, 0, DATE '2026-01-01')
+            """
+        )
+        con.execute(
+            """
+            CREATE TABLE empresas (
+                cnpj VARCHAR,
+                razao_social VARCHAR,
+                capital_social DECIMAL(18, 2),
+                situacao_cadastral VARCHAR
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO empresas VALUES
+                ('11111111000111', 'VENCEDORA UM', 1000.00, '2'),
+                ('22222222000122', 'VENCEDORA DOIS', 2000.00, '2'),
+                ('33333333000133', 'NAO VENCEDORA', 3000.00, '2')
+            """
+        )
+        chave = {
+            "cd_orgao": "001",
+            "nr_licitacao": "10",
+            "ano_licitacao": "2026",
+            "cd_tipo_modalidade": "PRE",
+        }
+
+        vencedoras = queries.vencedoras_da_licitacao(con, chave)
+        nao_vencedoras = queries.propostas_nao_vencedoras(con, chave)
+
+        assert list(vencedoras["cnpj_vencedor"]) == [
+            "11111111000111",
+            "22222222000122",
+        ]
+        assert list(vencedoras["valor_total_proposta"]) == [100, 150]
+        assert list(nao_vencedoras["cnpj_proposta"]) == ["33333333000133"]
+        assert list(nao_vencedoras["valor_total_proposta"]) == [175]
+    finally:
+        con.close()
 
 
 def test_licitacao_detalhe_monta_dossie(mock_db):
@@ -191,8 +299,10 @@ def test_licitacao_detalhe_monta_dossie(mock_db):
     assert detalhe["cnpj_vencedor"] == "32345678000195"
     assert not detalhe["cabecalho"].empty
     assert not detalhe["empresa"].empty
+    assert list(detalhe["vencedoras"]["cnpj_vencedor"]) == ["32345678000195"]
+    assert detalhe["vencedoras"].iloc[0]["valor_total_proposta"] == 100000
     assert not detalhe["contratos"].empty
-    assert len(detalhe["perdedoras"]) == 2
+    assert len(detalhe["nao_vencedoras"]) == 2
     # cover bidding (250k/100k = 2.5x >= 2) deve gerar um indício
     assert any("cover bidding" in s.lower() for s in detalhe["sinais"])
 

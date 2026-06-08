@@ -179,18 +179,30 @@
       {% endif %}
 
       <section class="content-card">
-        <div class="content-card__head"><div><h2>Empresa vencedora</h2><p>Fornecedor homologado no processo.</p></div></div>
-        {% if not empresa %}
-          <p class="cell-muted">Vencedora não identificada como pessoa jurídica nesta licitação.</p>
+        <div class="content-card__head">
+          <div><h2>Empresas vencedoras</h2><p>Empresas identificadas como vencedoras do processo e os valores de suas propostas.</p></div>
+          {% if vencedoras %}<span class="section-count">{{ vencedoras|length }}</span>{% endif %}
+        </div>
+        {% if not vencedoras %}
+          <div class="calm-state">Vencedora não identificada como pessoa jurídica nas fontes carregadas.</div>
         {% else %}
-          <div class="company-feature">
-            <div>
-              <div class="company-feature__name"><a href="/empresas/{{ cnpj_vencedor }}">{{ empresa.razao_social }}</a></div>
-              <div class="company-feature__meta">{{ cnpj_vencedor | cnpj }}</div>
-            </div>
-            <div class="company-feature__facts">
-              <span>Capital social<strong>{{ empresa.capital_social | moeda }}</strong></span>
-              <span>Situação<strong>{{ empresa.situacao_cadastral | situacao_cadastral }}</strong></span>
+          <div class="table-card table-card--responsive">
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead><tr><th>Empresa</th><th class="align-right">Valor proposto</th><th>Data da proposta</th></tr></thead>
+                <tbody>
+                  {% for p in vencedoras %}
+                  <tr>
+                    <td>
+                      <a class="entity-link" href="/empresas/{{ p.cnpj_vencedor }}">{{ p.razao_social or "(sem nome)" }}</a>
+                      <span class="entity-subtitle">{{ p.cnpj_vencedor | cnpj }}</span>
+                    </td>
+                    <td class="align-right nowrap" data-label="Valor proposto">{{ p.valor_total_proposta | moeda }}</td>
+                    <td class="nowrap" data-label="Data da proposta">{{ p.data_proposta | data_br }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </div>
           </div>
         {% endif %}
@@ -198,49 +210,20 @@
 
       <section class="content-card">
         <div class="content-card__head">
-          <div><h2>Todos os participantes</h2><p>Fornecedores vinculados ao processo nas fontes carregadas.</p></div>
-          <span class="section-count">{{ participantes|length }}</span>
+          <div><h2>Empresas não vencedoras</h2><p>Empresas que apresentaram proposta, mas não estão entre as vencedoras, da mais barata à mais cara.</p></div>
+          {% if nao_vencedoras %}<span class="section-count">{{ nao_vencedoras|length }}</span>{% endif %}
         </div>
-        <div class="table-card table-card--responsive">
-          <div class="table-scroll">
-            <table class="data-table">
-              <thead><tr><th>Fornecedor</th><th class="align-right">Valor</th><th>Data</th></tr></thead>
-              <tbody>
-                {% for p in participantes %}
-                <tr>
-                  <td>
-                    {% if p.cnpj_fornecedor %}
-                      <a class="entity-link" href="/empresas/{{ p.cnpj_fornecedor }}">{{ p.razao_social or "(sem nome)" }}</a>
-                      <span class="entity-subtitle">{{ p.cnpj_fornecedor | cnpj }}</span>
-                    {% else %}
-                      <strong>Fornecedor não identificado</strong>
-                      <span class="entity-subtitle entity-subtitle--text">CNPJ não informado na fonte</span>
-                    {% endif %}
-                  </td>
-                  <td class="align-right nowrap" data-label="Valor">{{ p.valor_contrato | moeda }}</td>
-                  <td class="nowrap" data-label="Data">{{ p.data_contrato | data_br }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section class="content-card">
-        <div class="content-card__head">
-          <div><h2>Propostas concorrentes</h2><p>Empresas que apresentaram proposta e não venceram, da mais barata à mais cara.</p></div>
-          {% if perdedoras %}<span class="section-count">{{ perdedoras|length }}</span>{% endif %}
-        </div>
-        {% if not perdedoras %}
-          <div class="calm-state">Nenhuma proposta concorrente registrada nas fontes carregadas.</div>
+        {% if not vencedoras %}
+          <div class="calm-state">Sem vencedora identificada, não é possível separar as propostas não vencedoras com segurança.</div>
+        {% elif not nao_vencedoras %}
+          <div class="calm-state">Nenhuma proposta não vencedora registrada nas fontes carregadas.</div>
         {% else %}
           <div class="table-card table-card--responsive">
             <div class="table-scroll">
               <table class="data-table">
-                <thead><tr><th>Empresa</th><th>Resultado</th><th class="align-right">Valor proposto</th></tr></thead>
+                <thead><tr><th>Empresa</th><th class="align-right">Valor proposto</th><th>Data da proposta</th></tr></thead>
                 <tbody>
-                  {% for p in perdedoras %}
+                  {% for p in nao_vencedoras %}
                   <tr>
                     <td>
                       {% if p.cnpj_proposta %}
@@ -251,8 +234,8 @@
                         <span class="entity-subtitle entity-subtitle--text">CNPJ não informado na fonte</span>
                       {% endif %}
                     </td>
-                    <td data-label="Resultado"><span class="status-badge score-sem-score">{{ p.resultado_proposta }}</span></td>
-                    <td class="align-right nowrap" data-label="Valor">{{ p.valor_total_proposta | moeda }}</td>
+                    <td class="align-right nowrap" data-label="Valor proposto">{{ p.valor_total_proposta | moeda }}</td>
+                    <td class="nowrap" data-label="Data da proposta">{{ p.data_proposta | data_br }}</td>
                   </tr>
                   {% endfor %}
                 </tbody>
