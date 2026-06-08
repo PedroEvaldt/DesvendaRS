@@ -117,20 +117,21 @@ Os testes de schema/joins/itens/propostas **dependem** do banco gerado pelo
 
 ---
 
-## Rodar o app de demonstração
+## Rodar o site
 
 ```bash
-uv run streamlit run app/streamlit_app.py
+uv run uvicorn web.main:app --reload
 ```
 
-O app lê `db/dados.duckdb` em modo somente leitura. Se o banco ainda não existir,
+Abra `http://127.0.0.1:8000`. O site FastAPI lê `db/dados.duckdb` em modo somente
+leitura. Se o banco ainda não existir,
 mostra um estado vazio com o caminho esperado e o comando de reconstrução.
 
 Para testar a interface sem os CSVs reais, gere um banco pequeno de demonstração:
 
 ```bash
 uv run python scripts/create_mock_db.py
-uv run streamlit run app/streamlit_app.py
+uv run uvicorn web.main:app --reload
 ```
 
 O script recusa sobrescrever `db/dados.duckdb` por padrão; use `--force` apenas

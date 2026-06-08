@@ -44,7 +44,12 @@ SCHEMAS = {
             CAST(data_contrato AS DATE)        AS data_contrato,
             CAST(numero_contrato AS VARCHAR)   AS numero_contrato,
             CAST(qtd_participantes AS INTEGER) AS qtd_participantes,
-            CAST(flag_covid AS BOOLEAN)        AS flag_covid
+            CAST(flag_covid AS BOOLEAN)        AS flag_covid,
+            CAST(cd_orgao AS VARCHAR)          AS cd_orgao,
+            CAST(nr_licitacao AS VARCHAR)      AS nr_licitacao,
+            CAST(ano_licitacao AS VARCHAR)     AS ano_licitacao,
+            CAST(cd_tipo_modalidade AS VARCHAR) AS cd_tipo_modalidade,
+            CAST(cnpj_vencedor AS VARCHAR)     AS cnpj_vencedor
         FROM df
     """,
     "empresas": """
@@ -299,6 +304,10 @@ def _criar_tabela(con: duckdb.DuckDBPyConnection, nome: str, df: pd.DataFrame) -
     if nome == "contratos":
         con.execute(
             f"CREATE INDEX IF NOT EXISTS idx_{nome}_cnpj ON {nome} (cnpj_fornecedor)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_contratos_licitacao "
+            "ON contratos (cd_orgao, nr_licitacao, ano_licitacao, cd_tipo_modalidade)"
         )
     elif nome == "itens":
         con.execute(

@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}{{ (empresa.razao_social if empresa else cnpj) }} — DesvendaRS{% endblock %}
+
+{% block content %}
+<section class="page-hero">
+  <div class="shell">
+    <div class="breadcrumb">
+      <a href="/">Empresas</a>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      <span>Dossiê do fornecedor</span>
+    </div>
+    <div class="detail-header">
+      <div>
+        <p class="eyebrow">Perfil do fornecedor</p>
+        <h1>{{ empresa.razao_social if empresa else "(empresa sem cadastro)" }}</h1>
+        <div class="detail-meta">
+          <span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V9l8-5 8 5v12M8 21v-5h8v5"/></svg>
+            CNPJ {{ cnpj | cnpj }}
+          </span>
+          {% if empresa and empresa.situacao_cadastral %}
+          <span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>
+            Situação {{ empresa.situacao_cadastral | situacao_cadastral }}
+          </span>
+          {% endif %}
+        </div>
+      </div>
+      {% if score %}
+      <div class="score-panel score-panel--{{ score.score | nivel }}">
+        <div>
+          <small>Score de risco</small>
+          <strong>{{ score.score }}</strong>
+        </div>
+        <span>{{ score.qtd_sinais }} red flags</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="page-section">
+  <div class="shell detail-layout">
+    <div class="detail-main">
+      <div class="notice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 17h.01"/></svg>
+        <p><strong>Como interpretar:</strong> os sinais abaixo orientam revisão humana. Eles ajudam a localizar padrões incomuns, mas não comprovam irregularidade.</p>
+      </div>
+
+      <section class="content-card">
+        <div class="content-card__head">
+          <div>
+            <h2>Red flags</h2>
+            <p>Indícios automáticos encontrados e a evidência usada no cálculo.</p>
+          </div>
+          {% if eventos %}<span class="section-count">{{ eventos|length }}</span>{% endif %}
+        </div>
+        {% if not eventos %}
+          <div class="calm-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>
+            Nenhum indício automático registrado para esta empresa.
+          </div>
+        {% else %}
+          <ul class="alert-list">
+            {% for ev in eventos %}
+            <li class="alert-item">
+              <span class="alert-item__icon">!</span>
+              <div>
+                <strong>{{ ev.descricao }}</strong>
+                <span class="alert-meta">{{ ev.forca }} · +{{ ev.pontos }} pontos</span>
+                <p>{{ ev.evidencia }}</p>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </section>
+
+      {% if sancoes %}
+      <section class="content-card">
+        <div class="content-card__head">
+          <div><h2>Sanções registradas</h2><p>Ocorrências presentes nas fontes públicas integradas.</p></div>
+          <span class="section-count">{{ sancoes|length }}</span>
+        </div>
+        <div class="table-card table-card--responsive">
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead><tr><th>Tipo</th><th>Órgão</th><th>Início</th><th>Fim</th><th>Fonte</th></tr></thead>
+              <tbody>
+                {% for s in sancoes %}
+                <tr>
+                  <td><strong>{{ s.tipo_sancao }}</strong></td>
+                  <td data-label="Órgão">{{ s.orgao_sancionador }}</td>
+                  <td class="nowrap" data-label="Início">{{ s.data_inicio | data_br }}</td>
+                  <td class="nowrap" data-label="Fim">{{ s.data_fim | data_br }}</td>
+                  <td data-label="Fonte">{{ s.fonte }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if contratos %}
+      <section class="content-card">
+        <div class="content-card__head">
+          <div><h2>Contratos</h2><p>Histórico encontrado nas fontes carregadas.</p></div>
+          <span class="section-count">{{ contratos|length }}</span>
+        </div>
+        <div class="table-card table-card--responsive">
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead><tr><th>Órgão</th><th>Município / modalidade</th><th class="align-right">Valor</th><th>Data</th><th>Objeto</th></tr></thead>
+              <tbody>
+                {% for c in contratos %}
+                <tr>
+                  <td>
+                    {% if c.cd_orgao %}
+                    <a class="entity-link" href="/licitacoes/{{ c.cd_orgao }}/{{ c.nr_licitacao }}/{{ c.ano_licitacao }}/{{ c.cd_tipo_modalidade }}">{{ c.orgao }}</a>
+                    {% else %}
+                    <strong>{{ c.orgao }}</strong>
+                    {% endif %}
+                  </td>
+                  <td data-label="Município">{{ c.municipio }}<span class="entity-subtitle">{{ c.modalidade or "Modalidade não informada" }}</span></td>
+                  <td class="align-right nowrap" data-label="Valor">{{ c.valor_contrato | moeda }}</td>
+                  <td class="nowrap" data-label="Data">{{ c.data_contrato | data_br }}</td>
+                  <td class="cell-muted" data-label="Objeto">{{ (c.objeto or "Não informado")[:80] }}{% if c.objeto and c.objeto|length > 80 %}…{% endif %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if socios %}
+      <section class="content-card">
+        <div class="content-card__head">
+          <div><h2>Quadro societário</h2><p>Documentos permanecem mascarados na fonte em respeito à LGPD.</p></div>
+          <span class="section-count">{{ socios|length }}</span>
+        </div>
+        <div class="table-card table-card--responsive">
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead><tr><th>Nome</th><th>Documento</th><th>Qualificação</th><th>Entrada</th></tr></thead>
+              <tbody>
+                {% for s in socios %}
+                <tr>
+                  <td><strong>{{ s.nome_socio }}</strong></td>
+                  <td class="mono" data-label="Documento">{{ s.doc_socio }}</td>
+                  <td data-label="Qualificação">{{ s.qualificacao }}</td>
+                  <td class="nowrap" data-label="Entrada">{{ s.data_entrada | data_br }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+    </div>
+
+    <aside class="detail-aside">
+      {% if empresa %}
+      <section class="content-card">
+        <div class="content-card__head"><div><h2>Cadastro</h2><p>Dados cadastrais da empresa.</p></div></div>
+        <dl class="facts">
+          <div class="fact"><dt>Capital social</dt><dd>{{ empresa.capital_social | moeda }}</dd></div>
+          <div class="fact"><dt>Situação cadastral</dt><dd>{{ empresa.situacao_cadastral | situacao_cadastral }}</dd></div>
+          <div class="fact"><dt>Data de abertura</dt><dd>{{ empresa.data_abertura | data_br }}</dd></div>
+          <div class="fact"><dt>Porte</dt><dd>{{ empresa.porte or "—" }}</dd></div>
+          <div class="fact"><dt>CNAE principal</dt><dd>{{ empresa.cnae or "—" }}</dd></div>
+        </dl>
+      </section>
+      {% endif %}
+      <a href="/" class="btn btn--ghost">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+        Voltar às empresas
+      </a>
+    </aside>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}DesvendaRS — Transparência em licitações públicas{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="shell hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow">Transparência que faz sentido</p>
+      <h1>Dados públicos para <em>perguntas melhores.</em></h1>
+      <p>Explore contratos, fornecedores e sinais que merecem atenção nas compras públicas do Rio Grande do Sul.</p>
+    </div>
+    <aside class="hero-aside" aria-label="Como usar o DesvendaRS">
+      <strong>Comece uma investigação</strong>
+      <p>Do panorama geral até a evidência que originou cada sinal.</p>
+      <ul>
+        <li><span class="step-icon">01</span> Busque uma empresa ou CNPJ</li>
+        <li><span class="step-icon">02</span> Compare score e sinais encontrados</li>
+        <li><span class="step-icon">03</span> Consulte contratos e contexto</li>
+      </ul>
+    </aside>
+  </div>
+</section>
+
+<div class="shell">
+  <form method="get" action="/" class="search-panel search-form" role="search">
+    <div class="field-grow">
+      <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
+      </svg>
+      <label class="sr-only" for="busca-empresa">Buscar empresa</label>
+      <input id="busca-empresa" class="search-input" type="search" name="q" value="{{ busca }}"
+             placeholder="Busque por razão social ou CNPJ" autocomplete="off">
+    </div>
+    <button class="btn" type="submit">
+      Buscar empresa
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+  </form>
+</div>
+
+<section class="page-section">
+  <div class="shell">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Visão geral</p>
+        <h2>O que os dados mostram</h2>
+        <p>Um retrato consolidado das fontes públicas integradas pelo DesvendaRS.</p>
+      </div>
+    </div>
+
+    <div class="metrics-grid">
+      <article class="metric-card">
+        <div class="metric-top">
+          <span class="metric-label">Contratos analisados</span>
+          <span class="metric-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5M10 13h5M10 17h5"/></svg>
+          </span>
+        </div>
+        <strong class="metric-value">{{ metricas.contratos | numero }}</strong>
+      </article>
+      <article class="metric-card">
+        <div class="metric-top">
+          <span class="metric-label">Valor contratado</span>
+          <span class="metric-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5c-.7-.7-1.7-1-2.8-1-1.7 0-3 .8-3 2s1.1 1.8 3 2.2 3 1 3 2.3-1.4 2.3-3.2 2.3c-1.2 0-2.4-.4-3.2-1.2M12.5 5.5v13"/></svg>
+          </span>
+        </div>
+        <strong class="metric-value">{{ metricas.valor_total | moeda }}</strong>
+      </article>
+      <article class="metric-card">
+        <div class="metric-top">
+          <span class="metric-label">Fornecedores</span>
+          <span class="metric-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V9l8-5 8 5v12"/><path d="M8 21v-5h8v5M8 11h.01M12 11h.01M16 11h.01"/></svg>
+          </span>
+        </div>
+        <strong class="metric-value">{{ metricas.fornecedores | numero }}</strong>
+      </article>
+      <article class="metric-card">
+        <div class="metric-top">
+          <span class="metric-label">Com sanção registrada</span>
+          <span class="metric-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 3.5 18h17z"/><path d="M12 9v4M12 16.5h.01"/></svg>
+          </span>
+        </div>
+        <strong class="metric-value">{{ metricas.fornecedores_sancionados | numero }}</strong>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="page-section page-section--white">
+  <div class="shell">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Empresas em destaque</p>
+        <h2>{% if busca %}Resultados para “{{ busca }}”{% else %}Mais sinais para revisão{% endif %}</h2>
+        <p>Ordenação baseada na quantidade de red flags e no score explicável. Um score alto não comprova irregularidade.</p>
+      </div>
+      {% if empresas %}
+      <div class="result-count"><strong>{{ empresas|length }}</strong> empresa{% if empresas|length != 1 %}s{% endif %}</div>
+      {% endif %}
+    </div>
+
+    {% if not tem_score %}
+      <div class="notice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 17h.01"/></svg>
+        <p>As tabelas de score ainda não foram geradas. Rode <code>uv run python -m etl.build_db</code> para calcular as red flags.</p>
+      </div>
+    {% elif not empresas %}
+      <div class="empty-state">
+        <span class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4M8 10h5"/></svg>
+        </span>
+        <h3>Nenhuma empresa encontrada</h3>
+        <p>Tente buscar por parte da razão social ou informe apenas os números do CNPJ.</p>
+      </div>
+    {% else %}
+      <div class="table-card table-card--responsive">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Empresa</th>
+                <th class="align-right">Sinais</th>
+                <th class="align-right">Score</th>
+                <th>Principais sinais</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in empresas %}
+              <tr>
+                <td>
+                  <a href="/empresas/{{ e.cnpj }}" class="entity-link">{{ e.razao_social or "(sem razão social)" }}</a>
+                  <span class="entity-subtitle">{{ e.cnpj | cnpj }}</span>
+                </td>
+                <td class="align-right" data-label="Red flags"><span class="signals-count">{{ e.qtd_sinais }}</span></td>
+                <td class="align-right" data-label="Score"><span class="score-badge score-{{ e.score | nivel }}">{{ e.score }}</span></td>
+                <td class="cell-muted" data-label="Principais sinais">{{ (e.sinais or "Nenhum sinal descrito")[:120] }}{% if e.sinais and e.sinais|length > 120 %}…{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

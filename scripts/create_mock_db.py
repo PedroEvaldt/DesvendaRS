@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
 
 import config
 from etl.build_db import VIEWS, _criar_tabela
+from etl.score_redflags import criar_tabelas_score
 
 
 def main() -> None:
@@ -53,6 +54,8 @@ def main() -> None:
         for name, sql in VIEWS.items():
             con.execute(f"DROP VIEW IF EXISTS {name}")
             con.execute(sql)
+        # Tabelas de red flags/score — necessárias para a home do site.
+        criar_tabelas_score(con)
     finally:
         con.close()
 
@@ -87,6 +90,11 @@ def _contratos() -> pd.DataFrame:
                 "numero_contrato": "2026-001",
                 "qtd_participantes": 1,
                 "flag_covid": True,
+                "cd_orgao": "001",
+                "nr_licitacao": "100",
+                "ano_licitacao": "2026",
+                "cd_tipo_modalidade": "PRE",
+                "cnpj_vencedor": "12345678000195",
             },
             {
                 "cnpj_fornecedor": "22345678000195",
@@ -100,6 +108,11 @@ def _contratos() -> pd.DataFrame:
                 "numero_contrato": "2026-014",
                 "qtd_participantes": 2,
                 "flag_covid": False,
+                "cd_orgao": "002",
+                "nr_licitacao": "200",
+                "ano_licitacao": "2026",
+                "cd_tipo_modalidade": "DSP",
+                "cnpj_vencedor": "22345678000195",
             },
             {
                 "cnpj_fornecedor": "32345678000195",
@@ -113,6 +126,31 @@ def _contratos() -> pd.DataFrame:
                 "numero_contrato": "2026-022",
                 "qtd_participantes": 4,
                 "flag_covid": False,
+                "cd_orgao": "003",
+                "nr_licitacao": "300",
+                "ano_licitacao": "2026",
+                "cd_tipo_modalidade": "PRE",
+                "cnpj_vencedor": "32345678000195",
+            },
+            {
+                # Segundo participante da mesma licitação de PELOTAS (perdedor),
+                # para demonstrar a seção "todos os participantes".
+                "cnpj_fornecedor": "52345678000195",
+                "razao_social": "DELTA SOLUCOES EM TI LTDA",
+                "orgao": "PM DE PELOTAS",
+                "municipio": "PELOTAS",
+                "modalidade": "PRE",
+                "objeto": "Licenciamento de software de atendimento ao cidadao",
+                "valor_contrato": 250000.00,
+                "data_contrato": date(2026, 1, 27),
+                "numero_contrato": "2026-022",
+                "qtd_participantes": 4,
+                "flag_covid": False,
+                "cd_orgao": "003",
+                "nr_licitacao": "300",
+                "ano_licitacao": "2026",
+                "cd_tipo_modalidade": "PRE",
+                "cnpj_vencedor": "32345678000195",
             },
             {
                 "cnpj_fornecedor": "42345678000195",
@@ -126,6 +164,31 @@ def _contratos() -> pd.DataFrame:
                 "numero_contrato": "2026-033",
                 "qtd_participantes": 6,
                 "flag_covid": False,
+                "cd_orgao": "004",
+                "nr_licitacao": "400",
+                "ano_licitacao": "2026",
+                "cd_tipo_modalidade": "PRE",
+                "cnpj_vencedor": "42345678000195",
+            },
+            {
+                # Processo sem vencedor identificado: o dossiê continua acessível
+                # pela chave composta da licitação.
+                "cnpj_fornecedor": None,
+                "razao_social": None,
+                "orgao": "PM DE BAGE",
+                "municipio": "BAGE",
+                "modalidade": "PRI",
+                "objeto": "Aquisicao de equipamentos para unidades de saude",
+                "valor_contrato": 98000.00,
+                "data_contrato": date(2026, 5, 10),
+                "numero_contrato": None,
+                "qtd_participantes": 0,
+                "flag_covid": False,
+                "cd_orgao": "005",
+                "nr_licitacao": "500",
+                "ano_licitacao": "2026",
+                "cd_tipo_modalidade": "PRI",
+                "cnpj_vencedor": None,
             },
         ]
     )
@@ -177,6 +240,28 @@ def _empresas() -> pd.DataFrame:
                 "porte": "EPP",
                 "endereco": "RUA VENANCIO AIRES 123",
                 "municipio": "SANTA MARIA",
+            },
+            {
+                "cnpj": "52345678000195",
+                "razao_social": "DELTA SOLUCOES EM TI LTDA",
+                "data_abertura": date(2020, 7, 14),
+                "cnae": "6204000",
+                "capital_social": 80000.00,
+                "situacao_cadastral": "2",
+                "porte": "EPP",
+                "endereco": "RUA GENERAL OSORIO 400",
+                "municipio": "PELOTAS",
+            },
+            {
+                "cnpj": "62345678000195",
+                "razao_social": "EPSILON SISTEMAS LTDA",
+                "data_abertura": date(2017, 2, 3),
+                "cnae": "6209100",
+                "capital_social": 150000.00,
+                "situacao_cadastral": "2",
+                "porte": "DEMAIS",
+                "endereco": "RUA MARECHAL DEODORO 88",
+                "municipio": "PELOTAS",
             },
         ]
     )

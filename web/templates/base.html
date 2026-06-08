@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102a43">
+  <meta name="description" content="Explore dados públicos de licitações, contratos e fornecedores do Rio Grande do Sul.">
+  <title>{% block title %}DesvendaRS{% endblock %}</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="site-header">
+    <div class="nav-shell">
+      <a href="/" class="brand" aria-label="DesvendaRS, página inicial">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" role="img">
+            <path d="M7 9.5h18M7 16h12M7 22.5h8"/>
+            <circle cx="23" cy="20.5" r="4.5"/>
+            <path d="m26.3 23.8 3.2 3.2"/>
+          </svg>
+        </span>
+        <span>
+          <strong>Desvenda</strong><b>RS</b>
+        </span>
+      </a>
+
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu-principal">
+        <span class="sr-only">Abrir menu</span>
+        <span></span><span></span><span></span>
+      </button>
+
+      <nav id="menu-principal" class="main-nav" aria-label="Navegação principal">
+        <a href="/" {% if request.url.path == "/" %}aria-current="page"{% endif %}>
+          Empresas
+        </a>
+        <a href="/licitacoes" {% if request.url.path.startswith("/licitacoes") %}aria-current="page"{% endif %}>
+          Licitações
+        </a>
+        <span class="data-chip"><i></i> Dados públicos do RS</span>
+      </nav>
+    </div>
+  </header>
+
+  <main id="conteudo">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-shell">
+      <div class="footer-brand">
+        <a href="/" class="brand brand--footer">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32"><path d="M7 9.5h18M7 16h12M7 22.5h8"/><circle cx="23" cy="20.5" r="4.5"/><path d="m26.3 23.8 3.2 3.2"/></svg>
+          </span>
+          <span><strong>Desvenda</strong><b>RS</b></span>
+        </a>
+        <p>Dados abertos para fortalecer o controle social.</p>
+      </div>
+      <div class="footer-note">
+        <strong>Importante</strong>
+        <p>O DesvendaRS levanta <b>indícios para revisão humana</b>, não conclusões de irregularidade. Um padrão incomum pode ter explicação legítima.</p>
+      </div>
+      <div class="footer-meta">
+        <span>Dados atualizados em jun. 2026</span>
+        <span>Fontes públicas oficiais</span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

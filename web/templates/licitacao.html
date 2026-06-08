@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Dossiê da licitação — DesvendaRS{% endblock %}
+
+{% block content %}
+{% if not cabecalho %}
+<section class="error-shell">
+  <div class="shell error-card">
+    <span class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4M8 10h5"/></svg></span>
+    <h1>Licitação não encontrada</h1>
+    <p>O processo solicitado não está presente nas fontes carregadas.</p>
+    <a href="/licitacoes" class="btn">Voltar para a busca</a>
+  </div>
+</section>
+{% else %}
+<section class="page-hero">
+  <div class="shell">
+    <div class="breadcrumb">
+      <a href="/licitacoes">Licitações</a>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      <a href="/licitacoes?municipio={{ cabecalho.municipio }}">{{ cabecalho.municipio }}</a>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      <span>Detalhes</span>
+    </div>
+    <p class="eyebrow">Dossiê da licitação</p>
+    <h1>{{ cabecalho.objeto or "Objeto não informado" }}</h1>
+    <div class="detail-meta">
+      <span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V9l8-5 8 5v12M8 21v-5h8v5"/></svg>
+        {{ cabecalho.orgao }}
+      </span>
+      <span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        {{ cabecalho.municipio }}
+      </span>
+    </div>
+  </div>
+</section>
+
+<section class="page-section">
+  <div class="shell">
+    <div class="metrics-grid">
+      <article class="metric-card">
+        <div class="metric-top"><span class="metric-label">Valor homologado</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M15 8.5c-.7-.7-1.6-1-2.7-1-1.6 0-2.8.8-2.8 2s1 1.8 2.8 2.2 2.9 1 2.9 2.3-1.3 2.3-3 2.3c-1.2 0-2.3-.4-3.1-1.2M12 5.5v13"/></svg></span></div>
+        <strong class="metric-value">{{ cabecalho.valor_contrato | moeda }}</strong>
+      </article>
+      <article class="metric-card">
+        <div class="metric-top"><span class="metric-label">Modalidade</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h7l4 4v14H7zM14 3v5h5"/></svg></span></div>
+        <strong class="metric-value">{{ cabecalho.modalidade or "—" }}</strong>
+      </article>
+      <article class="metric-card">
+        <div class="metric-top"><span class="metric-label">Data</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span></div>
+        <strong class="metric-value">{{ cabecalho.data_contrato | data_br }}</strong>
+      </article>
+      <article class="metric-card">
+        <div class="metric-top"><span class="metric-label">Participantes</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M3.5 20c.2-4 2.2-6 5.5-6s5.3 2 5.5 6M15 15c3.3-.3 5.1 1.4 5.5 4"/></svg></span></div>
+        <strong class="metric-value">{{ cabecalho.qtd_participantes or "—" }}</strong>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="page-section page-section--white">
+  <div class="shell detail-main">
+    <section class="content-card">
+      <div class="content-card__head">
+        <div><h2>Sinais para revisão</h2><p>Red flags identificadas automaticamente neste processo.</p></div>
+        {% if sinais %}<span class="section-count">{{ sinais|length }}</span>{% endif %}
+      </div>
+      {% if not sinais %}
+        <div class="calm-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>
+          Nenhum sinal automático forte foi identificado para esta licitação.
+        </div>
+      {% else %}
+        <ul class="alert-list">
+          {% for s in sinais %}
+          <li class="alert-item"><span class="alert-item__icon">!</span><div><strong>{{ s }}</strong></div></li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </section>
+
+    <section class="content-card">
+      <div class="content-card__head"><div><h2>Empresa vencedora</h2><p>Fornecedor homologado no processo.</p></div></div>
+      {% if not empresa %}
+        <p class="cell-muted">Vencedora não identificada como pessoa jurídica nesta licitação.</p>
+      {% else %}
+        <div class="company-feature">
+          <div>
+            <div class="company-feature__name"><a href="/empresas/{{ cnpj_vencedor }}">{{ empresa.razao_social }}</a></div>
+            <div class="company-feature__meta">{{ cnpj_vencedor | cnpj }}</div>
+          </div>
+          <div class="company-feature__facts">
+            <span>Capital social<strong>{{ empresa.capital_social | moeda }}</strong></span>
+            <span>Situação<strong>{{ empresa.situacao_cadastral | situacao_cadastral }}</strong></span>
+          </div>
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="content-card">
+      <div class="content-card__head">
+        <div><h2>Todos os participantes</h2><p>Fornecedores vinculados ao processo nas fontes carregadas.</p></div>
+        <span class="section-count">{{ participantes|length }}</span>
+      </div>
+      <div class="table-card table-card--responsive">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>Fornecedor</th><th class="align-right">Valor</th><th>Data</th></tr></thead>
+            <tbody>
+              {% for p in participantes %}
+              <tr>
+                <td>
+                  {% if p.cnpj_fornecedor %}
+                    <a class="entity-link" href="/empresas/{{ p.cnpj_fornecedor }}">{{ p.razao_social or "(sem nome)" }}</a>
+                    <span class="entity-subtitle">{{ p.cnpj_fornecedor | cnpj }}</span>
+                  {% else %}
+                    <strong>Fornecedor não identificado</strong>
+                    <span class="entity-subtitle entity-subtitle--text">CNPJ não informado na fonte</span>
+                  {% endif %}
+                </td>
+                <td class="align-right nowrap" data-label="Valor">{{ p.valor_contrato | moeda }}</td>
+                <td class="nowrap" data-label="Data">{{ p.data_contrato | data_br }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="content-card">
+      <div class="content-card__head">
+        <div><h2>Propostas concorrentes</h2><p>Empresas que apresentaram proposta e não venceram, da mais barata à mais cara.</p></div>
+        {% if perdedoras %}<span class="section-count">{{ perdedoras|length }}</span>{% endif %}
+      </div>
+      {% if not perdedoras %}
+        <div class="calm-state">Nenhuma proposta concorrente registrada nas fontes carregadas.</div>
+      {% else %}
+        <div class="table-card table-card--responsive">
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead><tr><th>Empresa</th><th>Resultado</th><th class="align-right">Valor proposto</th></tr></thead>
+              <tbody>
+                {% for p in perdedoras %}
+                <tr>
+                  <td>
+                    {% if p.cnpj_proposta %}
+                      <a class="entity-link" href="/empresas/{{ p.cnpj_proposta }}">{{ p.razao_social or "(sem nome)" }}</a>
+                      <span class="entity-subtitle">{{ p.cnpj_proposta | cnpj }}</span>
+                    {% else %}
+                      <strong>Empresa não identificada</strong>
+                      <span class="entity-subtitle entity-subtitle--text">CNPJ não informado na fonte</span>
+                    {% endif %}
+                  </td>
+                  <td data-label="Resultado"><span class="status-badge score-sem-score">{{ p.resultado_proposta }}</span></td>
+                  <td class="align-right nowrap" data-label="Valor">{{ p.valor_total_proposta | moeda }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+    </section>
+
+    <a href="/licitacoes?municipio={{ cabecalho.municipio }}" class="btn btn--ghost">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      Voltar às licitações de {{ cabecalho.municipio }}
+    </a>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
