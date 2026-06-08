@@ -36,6 +36,41 @@ uv sync                       # instala dependências travadas em uv.lock
 
 ---
 
+## Baixar/atualizar as fontes automaticamente
+
+```bash
+uv run python scripts/baixar_fontes.py --ano 2026
+```
+
+O script usa a API CKAN do TCE-RS para localizar os ZIPs de licitações e o Portal da Transparência para CEIS/CNEP. Ele salva e extrai os arquivos em `data/raw/`, pronto para o pipeline do ETL.
+
+Para o CFIL/RS, o fluxo recomendado é:
+
+1. baixar o arquivo manualmente no portal estadual e salvar como `data/raw/SancoesCFIL-RS.csv`; ou
+2. informar `--cfil-url` apenas se quiser testar um download direto por URL.
+
+Se `data/raw/SancoesCFIL-RS.csv` já existir, o script usa esse arquivo local automaticamente.
+
+Se quiser apenas listar as URLs que seriam baixadas:
+
+```bash
+uv run python scripts/baixar_fontes.py --ano 2026 --listar
+```
+
+Se quiser extrair apenas os CSVs de licitações que o ETL usa hoje, passe a lista desejada:
+
+```bash
+uv run python scripts/baixar_fontes.py --ano 2026 --filtrar-licitacoes licitacao.csv licitante.csv item.csv pessoas.csv proposta.csv item_prop.csv evento_lic.csv
+```
+
+Se você preferir informar a URL manualmente (fallback opcional), use:
+
+```bash
+uv run python scripts/baixar_fontes.py --ano 2026 --cfil-url "https://.../SancoesCFIL-RS.csv"
+```
+
+Esse parâmetro é opcional. Quando `data/raw/SancoesCFIL-RS.csv` já existe, o script usa o arquivo local e não depende de URL.
+
 ## Reconstruir o banco do zero
 
 ```bash
@@ -43,6 +78,7 @@ uv run python -m etl.build_db
 ```
 
 O comando:
+
 1. Remove `db/dados.duckdb` se existir.
 2. Lê e normaliza cada fonte (loaders em `etl/load_*.py`).
 3. Cria as 8 tabelas (`contratos`, `empresas`, `socios`, `sancoes`, `itens`,
@@ -67,6 +103,7 @@ uv run pytest -v
 ```
 
 Cobre:
+
 - `tests/test_normalize.py` — funções puras de `etl/normalize.py`
 - `tests/test_schema.py` — esquema das tabelas e formato dos CNPJs no banco
 - `tests/test_joins.py` — cardinalidade dos cruzamentos por CNPJ
@@ -125,20 +162,20 @@ SELECT * FROM vw_possivel_fraude ORDER BY score_bruto DESC LIMIT 20;
 
 Definido pela Seção 6 do [`CLAUDE.md`](./CLAUDE.md). Resumo:
 
-| Tabela | Chave | Origem | Fase |
-|---|---|---|---|
-| `contratos` | `cnpj_fornecedor` | LicitaCon (licitacao + licitante + pessoas) | 1 |
-| `empresas` | `cnpj` | Receita — `Dados-Empresas-RS.csv` | 1 |
-| `socios` | `cnpj` | Receita — `Socios-RS.csv` (`doc_socio` mascarado) | 1 |
-| `sancoes` | `cnpj` | CEIS + CNEP + CFIL/RS empilhados (coluna `fonte`) | 1 |
-| `itens` | chave composta licitação + `nr_lote` + `nr_item` | LicitaCon — `item.csv`; base de sobrepreço | 2 |
-| `propostas` | chave composta licitação + `cnpj_proposta` | LicitaCon — `proposta.csv`; base de cover bidding | 3 |
-| `propostas_itens` | chave composta licitação + `nr_lote` + `nr_item` + `cnpj_proposta` | LicitaCon — `item_prop.csv` | 3 |
-| `eventos_licitacao` | chave composta licitação + `sq_evento` | LicitaCon — `evento_lic.csv`; linha do tempo | 3 |
-| `redflag_eventos` | `escopo` + `entidade_id` + `sinal` | Eventos explicáveis de red flag calculados no DuckDB | Score |
-| `scores_fornecedor` | `cnpj` | Score agregado por fornecedor | Score |
-| `scores_licitacao` | chave composta licitação | Score agregado por licitação | Score |
-| `scores_item` | chave composta licitação + lote + item | Score agregado por item | Score |
+| Tabela              | Chave                                                              | Origem                                               | Fase  |
+| ------------------- | ------------------------------------------------------------------ | ---------------------------------------------------- | ----- |
+| `contratos`         | `cnpj_fornecedor`                                                  | LicitaCon (licitacao + licitante + pessoas)          | 1     |
+| `empresas`          | `cnpj`                                                             | Receita — `Dados-Empresas-RS.csv`                    | 1     |
+| `socios`            | `cnpj`                                                             | Receita — `Socios-RS.csv` (`doc_socio` mascarado)    | 1     |
+| `sancoes`           | `cnpj`                                                             | CEIS + CNEP + CFIL/RS empilhados (coluna `fonte`)    | 1     |
+| `itens`             | chave composta licitação + `nr_lote` + `nr_item`                   | LicitaCon — `item.csv`; base de sobrepreço           | 2     |
+| `propostas`         | chave composta licitação + `cnpj_proposta`                         | LicitaCon — `proposta.csv`; base de cover bidding    | 3     |
+| `propostas_itens`   | chave composta licitação + `nr_lote` + `nr_item` + `cnpj_proposta` | LicitaCon — `item_prop.csv`                          | 3     |
+| `eventos_licitacao` | chave composta licitação + `sq_evento`                             | LicitaCon — `evento_lic.csv`; linha do tempo         | 3     |
+| `redflag_eventos`   | `escopo` + `entidade_id` + `sinal`                                 | Eventos explicáveis de red flag calculados no DuckDB | Score |
+| `scores_fornecedor` | `cnpj`                                                             | Score agregado por fornecedor                        | Score |
+| `scores_licitacao`  | chave composta licitação                                           | Score agregado por licitação                         | Score |
+| `scores_item`       | chave composta licitação + lote + item                             | Score agregado por item                              | Score |
 
 Detalhes de cada coluna estão em [`docs/dicionario_dados.md`](docs/dicionario_dados.md) —
 documento de handoff pro time que fará o score de risco.
