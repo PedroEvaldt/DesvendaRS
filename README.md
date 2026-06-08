@@ -60,7 +60,7 @@ uv run python scripts/baixar_fontes.py --ano 2026 --listar
 Se quiser extrair apenas os CSVs de licitações que o ETL usa hoje, passe a lista desejada:
 
 ```bash
-uv run python scripts/baixar_fontes.py --ano 2026 --filtrar-licitacoes licitacao.csv licitante.csv item.csv pessoas.csv
+uv run python scripts/baixar_fontes.py --ano 2026 --filtrar-licitacoes licitacao.csv licitante.csv item.csv pessoas.csv proposta.csv item_prop.csv evento_lic.csv
 ```
 
 Se você preferir informar a URL manualmente (fallback opcional), use:
